@@ -1,0 +1,63 @@
+# Template notes
+
+This project was scaffolded from the kaliki-template stack. This file documents
+the wiring conventions so you can extend it cleanly.
+
+## Adding a domain (the "enumeration points")
+
+A domain touches a fixed set of places. To add `widgets`:
+
+1. `api/services/widgets.yaml` — define the contract first.
+2. `backend/internal/widgets/{service,store}.go` — handler + data access.
+3. `backend/sql/schema/00NN_widgets.sql` — goose-style migration.
+4. `backend/internal/server/server.go` — register routes:
+   `widgets.New(db).Register(api)`.
+{%- if include_frontend %}
+5. `frontend/` — regenerate the API client, then build the screen.
+{%- endif %}
+
+The `items` domain is a complete worked example of all of the above.
+
+## Removing the example domain
+
+{% if include_example_domain -%}
+Delete:
+- `backend/internal/items/`
+- `backend/sql/schema/0003_items.sql`
+- `api/services/items.yaml`
+- the `items.New(db).Register(api)` line in `backend/internal/server/server.go`
+{%- else -%}
+The example domain was not generated.
+{%- endif %}
+
+## Admin / secondary API surface split (upgrade path)
+
+This project ships a **single** generated API client. Admin-only endpoints are
+expected to be protected by **server-side authz** — that is the real security
+boundary.
+
+When you want to additionally keep admin endpoints out of the customer app's
+client bundle and docs, adopt the split-spec pattern:
+
+1. Tag operations in `api/services/*.yaml` with `x-audience: public | admin`.
+2. Build **two** combined specs (public, admin) from the redocly config.
+3. Generate **two** Dart clients; the customer app imports only the public one,
+   the admin app imports both.
+
+This is documentation-only here — wire it when the admin app needs it. Note it
+hides endpoints from the bundle, it is **not** a substitute for authz.
+
+## Observability
+
+Always-on, no-op by default. Configure `observability.endpoint` to export.
+
+## Shared UI
+
+{% if shared_ui_source == 'vendored' -%}
+`shared_ui` is vendored at `packages/shared_ui` — customize freely. To switch to
+a single-source-of-truth git dependency later, publish it to its own repo and
+change the dependency in `frontend/pubspec.yaml` to a `git:` ref.
+{%- else -%}
+`shared_ui` is consumed as a git dependency ({{ shared_ui_git_url }} @ {{ shared_ui_ref }}).
+Pin to a tag for reproducible builds.
+{%- endif %}

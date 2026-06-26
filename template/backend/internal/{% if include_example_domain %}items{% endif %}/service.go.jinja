@@ -1,0 +1,70 @@
+// Package items is the disposable EXAMPLE domain. It demonstrates the full
+// vertical slice: HTTP handler -> store -> postgres. Copy this pattern for your
+// real domains, then delete this package (see TEMPLATE_NOTES.md).
+package items
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
+	"{{ go_module_path }}/internal/database"
+)
+
+type Service struct {
+	store *Store
+}
+
+func New(db *database.DB) *Service {
+	return &Service{store: NewStore(db)}
+}
+
+// Register mounts the example routes on the given router group.
+func (s *Service) Register(r *gin.RouterGroup) {
+	g := r.Group("/items")
+	g.GET("", s.list)
+	g.POST("", s.create)
+	g.GET("/:id", s.get)
+}
+
+type createRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func (s *Service) list(c *gin.Context) {
+	items, err := s.store.List(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+func (s *Service) create(c *gin.Context) {
+	var req createRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	item, err := s.store.Create(c.Request.Context(), req.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, item)
+}
+
+func (s *Service) get(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	item, err := s.store.Get(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusOK, item)
+}

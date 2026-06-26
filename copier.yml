@@ -1,0 +1,147 @@
+_subdirectory: template
+_templates_suffix: .jinja
+_envops:
+  keep_trailing_newline: true
+
+# Post-generation: resolve the Go module graph so `go.sum` exists and the Docker
+# build is reproducible. Requires Go on the host (the template targets Go devs).
+_tasks:
+  - command: "go mod tidy"
+    working_directory: "backend"
+
+_message_after_copy: |
+  Project "{{ project_name }}" generated.
+
+  Next steps:
+    cd {{ project_slug }}
+    cp .env.example .env
+    docker compose up --build        # backend + postgres + redis
+    curl localhost:8080/health
+
+  Delete the example domain once you've copied its pattern:
+    see TEMPLATE_NOTES.md  ->  "Removing the example domain"
+
+# ─── Identity ────────────────────────────────────────────────────────────────
+project_name:
+  type: str
+  help: Human-readable project name
+  default: My App
+
+project_slug:
+  type: str
+  help: Directory / package slug (kebab-case)
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+
+go_module_path:
+  type: str
+  help: Go module path for the backend (e.g. github.com/org/app/backend)
+  default: "github.com/example/{{ project_slug }}/backend"
+
+org_domain:
+  type: str
+  help: Organization domain (used for bundle ids, image names)
+  default: example.com
+
+app_bundle_id:
+  type: str
+  help: Reverse-DNS bundle id for the Flutter app
+  default: "{{ org_domain.split('.') | reverse | join('.') }}.{{ project_slug | replace('-', '') }}"
+
+db_name:
+  type: str
+  help: Postgres database name
+  default: "{{ project_slug | replace('-', '_') }}"
+
+# ─── App composition ─────────────────────────────────────────────────────────
+include_frontend:
+  type: bool
+  help: Generate the primary Flutter app
+  default: true
+
+include_secondary_frontend:
+  type: bool
+  help: Generate a second Flutter app (e.g. admin/back-office)
+  default: false
+
+include_example_domain:
+  type: bool
+  help: "Generate the disposable 'items' example domain (full vertical slice)"
+  default: true
+
+# ─── Backend modules ─────────────────────────────────────────────────────────
+auth:
+  type: str
+  help: Authentication module
+  choices:
+    "None": none
+    "JWT (signup + login)": jwt-basic
+    "JWT full (invite + password reset)": jwt-full
+  default: jwt-full
+
+caching:
+  type: str
+  help: Request-time caching layer
+  choices:
+    "None": none
+    "Redis": redis
+  default: redis
+
+eventing:
+  type: str
+  help: Event publishing
+  choices:
+    "None": none
+    "Kafka / Redpanda": kafka-redpanda
+  default: none
+
+payments:
+  type: str
+  choices:
+    "None": none
+    "Razorpay": razorpay
+  default: none
+
+push_notifications:
+  type: str
+  choices:
+    "None": none
+    "Firebase": firebase
+  default: none
+
+object_storage:
+  type: str
+  choices:
+    "None": none
+    "S3-compatible": s3
+  default: none
+
+# ─── Shared UI ───────────────────────────────────────────────────────────────
+shared_ui_source:
+  type: str
+  help: How the shared_ui design system is consumed
+  choices:
+    "Vendored (copied into repo, customizable)": vendored
+    "Git dependency (single source of truth)": git
+  default: vendored
+  when: "{{ include_frontend }}"
+
+shared_ui_git_url:
+  type: str
+  help: Git URL for shared_ui
+  default: "https://github.com/example/{{ project_slug }}-shared-ui.git"
+  when: "{{ include_frontend and shared_ui_source == 'git' }}"
+
+shared_ui_ref:
+  type: str
+  help: Git ref/tag to pin shared_ui to
+  default: main
+  when: "{{ include_frontend and shared_ui_source == 'git' }}"
+
+# ─── Tooling (always-on, opt-out) ────────────────────────────────────────────
+agent_tooling:
+  type: bool
+  help: Include CLAUDE.md / AGENTS.md / doc-drift / fitness checks
+  default: true
+
+# observability is intentionally NOT a flag — always generated with a no-op
+# exporter by default; configure a real endpoint via config yaml.

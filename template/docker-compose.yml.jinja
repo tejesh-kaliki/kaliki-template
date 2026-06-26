@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-{{ db_name }}}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+{%- if caching == 'redis' %}
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda start
+      - --smp 1
+      - --overprovisioned
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+{%- endif %}
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-{{ db_name }}}?sslmode=disable
+      SERVER_PORT: "8080"
+{%- if caching == 'redis' %}
+      REDIS_URL: redis://redis:6379
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+      KAFKA_BROKERS: redpanda:9092
+{%- endif %}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+{%- if caching == 'redis' %}
+      redis:
+        condition: service_healthy
+{%- endif %}
+
+volumes:
+  pgdata:

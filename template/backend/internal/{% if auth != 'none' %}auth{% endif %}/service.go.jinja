@@ -1,0 +1,46 @@
+// Package auth is a kept module (not a throwaway example). The skeleton ships a
+// minimal signup/login surface; extend it with the JWT/invite/reset logic from
+// the reference implementation.
+package auth
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"{{ go_module_path }}/internal/database"
+)
+
+type Service struct {
+	db *database.DB
+}
+
+func New(db *database.DB) *Service { return &Service{db: db} }
+
+func (s *Service) Register(r *gin.RouterGroup) {
+	g := r.Group("/auth")
+	g.POST("/signup", s.signup)
+	g.POST("/login", s.login)
+{%- if auth == 'jwt-full' %}
+	g.POST("/invite", s.invite)
+	g.POST("/password-reset", s.passwordReset)
+{%- endif %}
+}
+
+func (s *Service) signup(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"todo": "implement signup"})
+}
+
+func (s *Service) login(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"todo": "implement login"})
+}
+{%- if auth == 'jwt-full' %}
+
+func (s *Service) invite(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"todo": "implement invite"})
+}
+
+func (s *Service) passwordReset(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"todo": "implement password reset"})
+}
+{%- endif %}

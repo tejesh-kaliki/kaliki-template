@@ -1,0 +1,21 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// Secondary (admin / back-office) app. Internal operator surface, distinct from
+// the customer-facing app. See TEMPLATE_NOTES.md for the API-surface split.
+void main() {
+  runApp(const ProviderScope(child: AdminApp()));
+}
+
+class AdminApp extends StatelessWidget {
+  const AdminApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: '{{ project_name }} Admin',
+      theme: ThemeData(useMaterial3: true),
+      home: const Scaffold(body: Center(child: Text('{{ project_name }} Admin'))),
+    );
+  }
+}

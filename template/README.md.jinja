@@ -1,0 +1,36 @@
+# {{ project_name }}
+
+Generated from the kaliki-template stack (Go + Flutter + OpenAPI codegen, Docker-first).
+
+## Quick start (Docker)
+
+```sh
+cp .env.example .env
+docker compose up --build
+curl localhost:8080/health
+{%- if include_example_domain %}
+curl -X POST localhost:8080/api/v1/items -d '{"name":"hello"}' -H 'content-type: application/json'
+curl localhost:8080/api/v1/items
+{%- endif %}
+```
+
+Postgres{% if caching == 'redis' %}, Redis{% endif %}{% if eventing == 'kafka-redpanda' %}, Redpanda{% endif %} and the backend all come up together. Schema migrations run automatically on backend startup.
+
+## Layout
+
+- `backend/` — Go HTTP server (gin + pgx). Domains live in `internal/<domain>`.
+- `api/` — OpenAPI specs (source of truth for the API contract).
+{%- if include_frontend %}
+- `frontend/` — Flutter app (Riverpod + GoRouter).
+{%- endif %}
+{%- if include_secondary_frontend %}
+- `admin_frontend/` — secondary (admin) Flutter app.
+{%- endif %}
+
+## Observability
+
+Tracing is wired in by default with a **no-op** exporter. Set
+`observability.endpoint` in `backend/config/env.yaml` (or
+`OTEL_EXPORTER_OTLP_ENDPOINT`) to export to a real collector.
+
+See `TEMPLATE_NOTES.md` for how to add a domain and remove the example.

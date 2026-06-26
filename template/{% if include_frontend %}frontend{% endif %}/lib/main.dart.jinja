@@ -1,0 +1,21 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+void main() {
+  runApp(const ProviderScope(child: {{ project_name | replace(' ', '') }}App()));
+}
+
+class {{ project_name | replace(' ', '') }}App extends StatelessWidget {
+  const {{ project_name | replace(' ', '') }}App({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: '{{ project_name }}',
+      theme: ThemeData(useMaterial3: true),
+      home: const Scaffold(
+        body: Center(child: Text('{{ project_name }}')),
+      ),
+    );
+  }
+}
