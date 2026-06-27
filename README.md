@@ -44,12 +44,13 @@ verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml
 - [x] auth: JWT signup/login, email verification + password reset, argon2id
 - [x] Tier-2 modules: caching (redis), eventing (kafka + outbox), payments,
       push, object storage — integration points, gated by flags
-- [x] GitHub Actions matrix (renders + builds minimal/default/full)
+- [x] GitHub Actions matrix (renders + builds + tests minimal/default/full)
+- [x] integration-style handler tests for `items` + `auth` (real DB, worked
+      examples in `internal/testsupport`)
 
 ### Not planned (for now)
 - shared_ui repo extraction — `shared_ui_source=git` flag exists; defer the
   actual split until a second product consumes it.
 
 ### Possible next
-- per-domain handler tests in the `items`/`auth` slices as worked examples
 - transactional outbox relay worker (cmd/workers) for eventing
