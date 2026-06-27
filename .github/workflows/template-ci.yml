@@ -1,0 +1,52 @@
+name: template-ci
+
+# Renders the template across representative flag combinations and verifies each
+# generated project builds and tests green. Combinatorial templates rot without
+# this — it is the safety net for adding modules.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  render-and-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: minimal
+            flags: "-d auth=none -d include_example_domain=false -d include_frontend=false -d caching=none"
+          - name: default
+            flags: ""
+          - name: full
+            flags: "-d eventing=kafka-redpanda -d payments=razorpay -d push_notifications=firebase -d object_storage=s3 -d include_secondary_frontend=true"
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Render template (${{ matrix.name }})
+        run: uvx copier copy --defaults --trust ${{ matrix.flags }} . out
+
+      - name: Backend build + test
+        working-directory: out/backend
+        run: |
+          go build ./...
+          go test ./...
+
+      - name: API spec build
+        working-directory: out/api
+        run: |
+          npm install
+          npm run build:local

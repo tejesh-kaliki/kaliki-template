@@ -35,13 +35,21 @@ SKIP_DOCKER=1 ./test-template.sh   # render + go vet only (fast)
 
 ## Status
 
-Basic structuring. Codegen pipeline (sqlc / oapi-codegen / redocly build /
-Dart client regen), CI matrix, and the Tier-2 module internals are scaffolded
-and documented but not yet fully fleshed out — see `TODO` below.
+Working stack. Codegen pipeline, auth, Tier-2 modules, and CI are in place and
+verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml`).
 
-### TODO
-- [ ] sqlc + oapi-codegen wiring (replace hand-written store/handler in `items`)
-- [ ] redocly combined-spec build + Dart client regen script
-- [ ] flesh out auth (JWT/invite/reset), eventing (outbox), payments, push, storage
-- [ ] GitHub Actions matrix that generates + builds combos
-- [ ] extract shared_ui to its own repo (git-dependency mode)
+### Done
+- [x] sqlc + oapi-codegen wiring (`items` is a full generated vertical slice)
+- [x] redocly auto-discovery spec build + Dart client regen script
+- [x] auth: JWT signup/login, email verification + password reset, argon2id
+- [x] Tier-2 modules: caching (redis), eventing (kafka + outbox), payments,
+      push, object storage — integration points, gated by flags
+- [x] GitHub Actions matrix (renders + builds minimal/default/full)
+
+### Not planned (for now)
+- shared_ui repo extraction — `shared_ui_source=git` flag exists; defer the
+  actual split until a second product consumes it.
+
+### Possible next
+- per-domain handler tests in the `items`/`auth` slices as worked examples
+- transactional outbox relay worker (cmd/workers) for eventing
