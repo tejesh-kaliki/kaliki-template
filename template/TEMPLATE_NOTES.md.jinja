@@ -70,19 +70,29 @@ hit real endpoint paths, verifying DB state (not just HTTP status). They run
 against a throwaway postgres.
 
 ```sh
-# start the test database
-docker compose -f backend/docker/docker-compose-test.yaml up -d
-
-# run tests (-p 1 serializes packages; they share one test DB)
-cd backend && TEST_DATABASE_URL="postgres://test_user:test_password@localhost:25432/test_db?sslmode=disable" \
-  go test -p 1 ./...
-# or: make test
+cd backend && make test     # starts test postgres, runs tests, tears it down
 ```
+
+Each test package uses its own postgres **schema** (via `search_path`), so
+packages run in parallel without colliding — no `-p 1` needed. Per test, tables
+are truncated. Shared helpers live in `internal/testsupport`.
 
 Conventions: one top-level `Test<OperationId>` per OpenAPI operation; subtests
 in the order `success`, `authorization`, `validation`, `not_found`, `conflict`.
-Shared helpers live in `internal/testsupport`. See `internal/items` and
-`internal/auth` for worked examples.
+See `internal/items` and `internal/auth` for worked examples.
+
+### Database isolation — when to change it
+
+The default (shared postgres, schema-per-package, truncate-per-test) is simple
+and parallel-safe. Graduate only if you hit real pain:
+
+- **Leftover-state flakiness or zero-setup `go test`** → adopt
+  [testcontainers-go](https://golang.testcontainers.org/) so the DB lifecycle is
+  owned by the test process (random ports, auto-cleanup via Ryuk).
+- **Within-package parallelism** (`t.Parallel()` across tests in one package) →
+  transaction-per-test, but only if you inject the `database.Queries` executor
+  (sqlc accepts any `DBTX`, including `pgx.Tx`) into your services. This couples
+  service construction to the test strategy, so prefer it only where it pays off.
 
 ## Observability
 
