@@ -3,6 +3,9 @@ package config
 
 import (
 	"os"
+{%- if auth == 'jwt-full' and mailer %}
+	"strconv"
+{%- endif %}
 {%- if eventing == 'kafka-redpanda' %}
 	"strings"
 {%- endif %}
@@ -10,11 +13,48 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+{%- if auth == 'jwt-full' %}
+// MailConfig drives the transactional mail package. Provider selects the
+// transport at runtime ("smtp" -> Mailpit/SMTP, "ses" -> AWS SES, anything else
+// -> the log transport, which prints the message to the server log). Switching
+// providers never changes whether credentials leak to clients — they don't.
+type MailConfig struct {
+	Provider      string `yaml:"provider"`
+	SenderAddress string `yaml:"sender_address"`
+	SenderName    string `yaml:"sender_name"`
+	AppName       string `yaml:"app_name"`
+	// BaseURL is the public app URL used to build links (token verification method).
+	BaseURL string `yaml:"base_url"`
+{%- if mailer %}
+	SMTP SMTPConfig `yaml:"smtp"`
+	SES  SESConfig  `yaml:"ses"`
+{%- endif %}
+}
+{%- if mailer %}
+
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+type SESConfig struct {
+	Region          string `yaml:"region"`
+	AccessKeyID     string `yaml:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key"`
+}
+{%- endif %}
+{%- endif %}
+
 type Config struct {
 	Server        ServerConfig        `yaml:"server"`
 	Database      DatabaseConfig      `yaml:"database"`
 	Observability ObservabilityConfig `yaml:"observability"`
 	Token         TokenConfig         `yaml:"token"`
+{%- if auth == 'jwt-full' %}
+	Mail          MailConfig          `yaml:"mail"`
+{%- endif %}
 {%- if caching == 'redis' %}
 	Redis         RedisConfig         `yaml:"redis"`
 {%- endif %}
@@ -114,6 +154,42 @@ func Load(path string) (*Config, error) {
 	if v := os.Getenv("JWT_SECRET"); v != "" {
 		cfg.Token.Secret = v
 	}
+{%- if auth == 'jwt-full' %}
+	if v := os.Getenv("MAIL_PROVIDER"); v != "" {
+		cfg.Mail.Provider = v
+	}
+	if v := os.Getenv("MAIL_SENDER_ADDRESS"); v != "" {
+		cfg.Mail.SenderAddress = v
+	}
+	if v := os.Getenv("MAIL_BASE_URL"); v != "" {
+		cfg.Mail.BaseURL = v
+	}
+{%- if mailer %}
+	if v := os.Getenv("SMTP_HOST"); v != "" {
+		cfg.Mail.SMTP.Host = v
+	}
+	if v := os.Getenv("SMTP_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Mail.SMTP.Port = p
+		}
+	}
+	if v := os.Getenv("SMTP_USERNAME"); v != "" {
+		cfg.Mail.SMTP.Username = v
+	}
+	if v := os.Getenv("SMTP_PASSWORD"); v != "" {
+		cfg.Mail.SMTP.Password = v
+	}
+	if v := os.Getenv("SES_REGION"); v != "" {
+		cfg.Mail.SES.Region = v
+	}
+	if v := os.Getenv("SES_ACCESS_KEY_ID"); v != "" {
+		cfg.Mail.SES.AccessKeyID = v
+	}
+	if v := os.Getenv("SES_SECRET_ACCESS_KEY"); v != "" {
+		cfg.Mail.SES.SecretAccessKey = v
+	}
+{%- endif %}
+{%- endif %}
 {%- if caching == 'redis' %}
 	if v := os.Getenv("REDIS_URL"); v != "" {
 		cfg.Redis.URL = v

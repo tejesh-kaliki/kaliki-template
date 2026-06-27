@@ -28,6 +28,8 @@ done
 COMBOS=(
   "minimal|-d auth=none -d include_example_domain=false -d include_frontend=false -d caching=none"
   "default|"
+  "token_mail|-d verification_method=token"
+  "no_mailer|-d mailer=false"
   "full|-d eventing=kafka-redpanda -d payments=razorpay -d push_notifications=firebase -d object_storage=s3 -d include_secondary_frontend=true"
 )
 

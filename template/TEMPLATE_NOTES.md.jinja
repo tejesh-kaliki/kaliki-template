@@ -47,6 +47,45 @@ client bundle and docs, adopt the split-spec pattern:
 This is documentation-only here — wire it when the admin app needs it. Note it
 hides endpoints from the bundle, it is **not** a substitute for authz.
 
+{% if auth == 'jwt-full' -%}
+## Authentication & transactional email
+
+Signup, login, email verification and password reset live in `internal/auth`,
+backed by `internal/mail`.
+
+**Credentials never leak to clients.** Verification {% if verification_method == 'otp' %}codes{% else %}tokens{% endif %} and password-reset
+{% if verification_method == 'otp' %}codes{% else %}tokens{% endif %} are delivered through the mailer only — they are never
+returned in any API response. This holds regardless of the configured provider.
+
+Verification method: **{{ verification_method }}**
+{%- if verification_method == 'otp' %} (6-digit codes, 15-minute expiry, constant-time compared).{% else %} (random tokens emailed as links built from `mail.base_url`).{% endif %}
+
+### Mail providers
+
+`internal/mail` selects a transport at runtime from `mail.provider`:
+
+- `smtp` — standard SMTP. Locally this points at **Mailpit** (web UI on
+  http://localhost:8025) so you can read every email without sending anything.
+{%- if mailer %}
+- `ses` — AWS SES v2. In production set `MAIL_PROVIDER=ses` plus `SES_REGION`
+  (credentials resolve from `SES_ACCESS_KEY_ID`/`SES_SECRET_ACCESS_KEY` or the
+  default AWS chain — env, profile, or IAM role).
+{%- endif %}
+- anything else / empty — the **log transport**: the email is written to the
+  server log instead of being sent. This is the safe default, so the app boots
+  with zero email infrastructure and credentials stay observable in dev.
+
+Email templates are embedded HTML in `internal/mail/templates/`. Add a new email
+type by adding a template + a typed `Send*` method on the mailer.
+
+### Local development
+
+```sh
+docker compose -f docker-compose.services.yml up -d   # postgres{% if caching == 'redis' %} + redis{% endif %}{% if mailer %} + mailpit{% endif %}
+cd backend && go run ./cmd/server
+```
+{% if mailer %}Open http://localhost:8025 to read the verification / reset emails.{% endif %}
+{% endif %}
 ## Tier-2 modules
 
 These are wired as integration points (client init + config), not full business

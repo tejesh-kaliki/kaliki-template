@@ -25,9 +25,12 @@ _message_after_copy: |
   Next steps:
     cd {{ project_slug }}
     cp .env.example .env
-    docker compose up --build        # backend + postgres + redis
+    docker compose up --build        # backend + postgres + redis{% if auth == 'jwt-full' and mailer %} + mailpit{% endif %}
     curl localhost:8080/health
-
+  {% if auth == 'jwt-full' and mailer %}
+  Verification / password-reset emails are captured by Mailpit:
+    open http://localhost:8025
+  {% endif %}
   Delete the example domain once you've copied its pattern:
     see TEMPLATE_NOTES.md  ->  "Removing the example domain"
 
@@ -87,6 +90,26 @@ auth:
     "JWT (signup + login)": jwt-basic
     "JWT full (invite + password reset)": jwt-full
   default: jwt-full
+
+# Real transactional email transports (SMTP + SES) for verification + password
+# reset, plus Mailpit in the local stack. When false, the mail package is still
+# generated but only with the log transport: credentials are written to the
+# server log and NEVER returned in the API response. Switching this flag never
+# leaks tokens to clients.
+mailer:
+  type: bool
+  help: Real email transports (SMTP -> Mailpit locally, SES in prod) + Mailpit
+  default: true
+  when: "{{ auth == 'jwt-full' }}"
+
+verification_method:
+  type: str
+  help: How accounts verify email / reset password
+  choices:
+    "OTP code (6-digit, mobile-friendly)": otp
+    "Token link (URL with embedded token)": token
+  default: otp
+  when: "{{ auth == 'jwt-full' }}"
 
 caching:
   type: str

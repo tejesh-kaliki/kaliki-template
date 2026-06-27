@@ -73,11 +73,9 @@ paths:
               $ref: "#/components/schemas/PasswordResetRequest"
       responses:
         "200":
-          description: Reset token issued (if the account exists)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TokenResponse"
+          description: >-
+            Always returns 200 (even if the account does not exist). If it does,
+            a reset credential is emailed — never returned in the response.
   /auth/password-reset/confirm:
     post:
       operationId: confirmPasswordReset
@@ -125,13 +123,6 @@ components:
           type: string
         user:
           $ref: "#/components/schemas/User"
-{%- if auth == 'jwt-full' %}
-        verify_token:
-          type: string
-          description: >-
-            Dev convenience only — in production the verification token is
-            emailed, not returned in the signup response.
-{%- endif %}
     SignupRequest:
       type: object
       required: [email, password]
@@ -156,10 +147,20 @@ components:
 {%- if auth == 'jwt-full' %}
     VerifyRequest:
       type: object
+{%- if verification_method == 'otp' %}
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+{%- else %}
       required: [token]
       properties:
         token:
           type: string
+{%- endif %}
     PasswordResetRequest:
       type: object
       required: [email]
@@ -169,6 +170,18 @@ components:
           format: email
     PasswordResetConfirm:
       type: object
+{%- if verification_method == 'otp' %}
+      required: [email, code, password]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+        password:
+          type: string
+          minLength: 8
+{%- else %}
       required: [token, password]
       properties:
         token:
@@ -176,10 +189,5 @@ components:
         password:
           type: string
           minLength: 8
-    TokenResponse:
-      type: object
-      required: [token]
-      properties:
-        token:
-          type: string
+{%- endif %}
 {%- endif %}

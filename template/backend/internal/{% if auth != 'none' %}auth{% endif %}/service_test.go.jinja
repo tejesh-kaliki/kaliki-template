@@ -42,8 +42,12 @@ func TestSignup(t *testing.T) {
 			t.Fatalf("password not hashed: %q", hash)
 		}
 {%- if auth == 'jwt-full' %}
-		if body["verify_token"] == nil || body["verify_token"] == "" {
-			t.Fatal("expected a verify_token for unverified signup")
+		// The verification credential is emailed, never returned in the response.
+		if body["verify_token"] != nil {
+			t.Fatal("credential must not be returned in the response")
+		}
+		if mailer.verifications["a@b.com"] == "" {
+			t.Fatal("expected a verification credential to be emailed")
 		}
 {%- endif %}
 	})
@@ -117,12 +121,20 @@ func TestVerifyEmail(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		setupTest(t)
 
-		s := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+		testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
 			`{"email":"v@b.com","password":"password123"}`)
-		verifyToken := decode(t, s.Body.Bytes())["verify_token"].(string)
+		credential := mailer.verifications["v@b.com"]
+		if credential == "" {
+			t.Fatal("no verification credential captured")
+		}
 
+{%- if verification_method == 'otp' %}
 		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/verify",
-			`{"token":"`+verifyToken+`"}`)
+			`{"email":"v@b.com","code":"`+credential+`"}`)
+{%- else %}
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/verify",
+			`{"token":"`+credential+`"}`)
+{%- endif %}
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200 (%s)", w.Code, w.Body.String())
 		}
@@ -140,8 +152,15 @@ func TestVerifyEmail(t *testing.T) {
 	t.Run("validation", func(t *testing.T) {
 		setupTest(t)
 
+{%- if verification_method == 'otp' %}
+		testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"v2@b.com","password":"password123"}`)
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/verify",
+			`{"email":"v2@b.com","code":"000000"}`)
+{%- else %}
 		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/verify",
 			`{"token":"not-a-real-token"}`)
+{%- endif %}
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", w.Code)
 		}
@@ -156,10 +175,21 @@ func TestConfirmPasswordReset(t *testing.T) {
 			`{"email":"r@b.com","password":"password123"}`)
 		req := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/request",
 			`{"email":"r@b.com"}`)
-		resetToken := decode(t, req.Body.Bytes())["token"].(string)
+		if req.Code != http.StatusOK {
+			t.Fatalf("request status = %d, want 200", req.Code)
+		}
+		credential := mailer.resets["r@b.com"]
+		if credential == "" {
+			t.Fatal("no reset credential captured")
+		}
 
+{%- if verification_method == 'otp' %}
 		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/confirm",
-			`{"token":"`+resetToken+`","password":"newpassword123"}`)
+			`{"email":"r@b.com","code":"`+credential+`","password":"newpassword123"}`)
+{%- else %}
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/confirm",
+			`{"token":"`+credential+`","password":"newpassword123"}`)
+{%- endif %}
 		if w.Code != http.StatusOK {
 			t.Fatalf("confirm status = %d, want 200 (%s)", w.Code, w.Body.String())
 		}
@@ -175,8 +205,15 @@ func TestConfirmPasswordReset(t *testing.T) {
 	t.Run("validation", func(t *testing.T) {
 		setupTest(t)
 
+{%- if verification_method == 'otp' %}
+		testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"r2@b.com","password":"password123"}`)
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/confirm",
+			`{"email":"r2@b.com","code":"000000","password":"newpassword123"}`)
+{%- else %}
 		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/confirm",
 			`{"token":"bad","password":"newpassword123"}`)
+{%- endif %}
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", w.Code)
 		}

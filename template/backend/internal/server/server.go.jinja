@@ -19,6 +19,9 @@ import (
 {%- if auth != 'none' %}
 	"{{ go_module_path }}/internal/auth"
 {%- endif %}
+{%- if auth == 'jwt-full' %}
+	"{{ go_module_path }}/internal/mail"
+{%- endif %}
 {%- if caching == 'redis' %}
 	"{{ go_module_path }}/internal/cache"
 {%- endif %}
@@ -107,7 +110,9 @@ func Run() {
 {%- if auth != 'none' or include_example_domain %}
 	api := r.Group("/api/v1")
 {%- endif %}
-{%- if auth != 'none' %}
+{%- if auth == 'jwt-full' %}
+	auth.New(db, cfg.Token, mail.New(cfg.Mail)).Register(api)
+{%- elif auth == 'jwt-basic' %}
 	auth.New(db, cfg.Token).Register(api)
 {%- endif %}
 {%- if include_example_domain %}

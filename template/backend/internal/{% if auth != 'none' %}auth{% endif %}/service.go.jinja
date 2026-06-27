@@ -4,9 +4,6 @@ package auth
 
 import (
 	"net/http"
-{%- if auth == 'jwt-full' %}
-	"time"
-{%- endif %}
 
 	"github.com/gin-gonic/gin"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -14,19 +11,35 @@ import (
 	gen "{{ go_module_path }}/gen/api/auth"
 	"{{ go_module_path }}/internal/config"
 	"{{ go_module_path }}/internal/database"
+{%- if auth == 'jwt-full' %}
+	"{{ go_module_path }}/internal/mail"
+{%- endif %}
 )
 
 type Service struct {
 	store  *Store
 	tokens *TokenIssuer
+{%- if auth == 'jwt-full' %}
+	mailer mail.Mailer
+{%- endif %}
 }
 
+{% if auth == 'jwt-full' -%}
+func New(db *database.DB, cfg config.TokenConfig, mailer mail.Mailer) *Service {
+	return &Service{
+		store:  NewStore(db),
+		tokens: NewTokenIssuer(cfg),
+		mailer: mailer,
+	}
+}
+{%- else -%}
 func New(db *database.DB, cfg config.TokenConfig) *Service {
 	return &Service{
 		store:  NewStore(db),
 		tokens: NewTokenIssuer(cfg),
 	}
 }
+{%- endif %}
 
 // Register mounts the generated routes under the given router group.
 func (s *Service) Register(r gin.IRouter) {
@@ -63,25 +76,16 @@ func (s *Service) Signup(c *gin.Context) {
 	}
 {%- if auth == 'jwt-full' %}
 
-	// Account is unverified; issue a verify token (emailed in production).
-	verifyToken, err := s.issueToken(c.Request.Context(), user.ID, kindVerify, 72*time.Hour)
+	// Account starts unverified. Issue a verification credential and email it.
+	// The credential is NEVER returned in the response.
+	credential, err := s.issueVerification(c.Request.Context(), user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not issue verify token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not issue verification"})
 		return
 	}
-	token, err := s.tokens.Issue(user.ID.String(), user.Role)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not issue token"})
-		return
-	}
-	c.JSON(http.StatusCreated, gen.AuthResponse{
-		Token:       token,
-		User:        toAPIUser(user),
-		VerifyToken: &verifyToken,
-	})
-{%- else %}
-	s.respondWithToken(c, http.StatusCreated, user)
+	s.sendVerification(c.Request.Context(), user.Email, credential)
 {%- endif %}
+	s.respondWithToken(c, http.StatusCreated, user)
 }
 
 // Login implements gen.ServerInterface.

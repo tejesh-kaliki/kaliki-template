@@ -39,6 +39,15 @@ services:
     ports:
       - "9092:9092"
 {%- endif %}
+{%- if auth == 'jwt-full' and mailer %}
+
+  # Mailpit captures all outgoing mail locally. Web UI on http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+{%- endif %}
 
   backend:
     build:
@@ -48,6 +57,13 @@ services:
       SERVER_PORT: "8080"
 {%- if auth != 'none' %}
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+{%- endif %}
+{%- if auth == 'jwt-full' and mailer %}
+      MAIL_PROVIDER: smtp
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_SENDER_ADDRESS: ${MAIL_SENDER_ADDRESS:-no-reply@{{ org_domain }}}
+      MAIL_BASE_URL: ${MAIL_BASE_URL:-http://localhost:8080}
 {%- endif %}
 {%- if caching == 'redis' %}
       REDIS_URL: redis://redis:6379
@@ -63,6 +79,10 @@ services:
 {%- if caching == 'redis' %}
       redis:
         condition: service_healthy
+{%- endif %}
+{%- if auth == 'jwt-full' and mailer %}
+      mailpit:
+        condition: service_started
 {%- endif %}
 
 volumes:
