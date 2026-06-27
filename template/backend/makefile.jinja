@@ -2,14 +2,24 @@
 SQLC_VERSION := v1.27.0
 OAPI_VERSION := v2.4.1
 
-.PHONY: build test generate sqlc oapi
+.PHONY: build test test-up test-down generate sqlc oapi
+
+TEST_COMPOSE := docker compose -f docker/docker-compose-test.yaml
 
 build:
 	go build -o bin/server ./cmd/server
 
-# -p 1 serializes packages: integration tests share one test database.
-test:
-	go test -p 1 ./...
+# Self-starting integration tests: brings the test postgres up, runs tests,
+# tears it down (and reports the test exit status). Each test package uses its
+# own schema, so packages run in parallel — no -p 1 needed.
+test: test-up
+	go test ./... ; status=$$? ; $(TEST_COMPOSE) down -v >/dev/null 2>&1 ; exit $$status
+
+test-up:
+	$(TEST_COMPOSE) up -d --wait
+
+test-down:
+	$(TEST_COMPOSE) down -v
 
 # Regenerate all code from sql/queries and api/services specs.
 generate: sqlc oapi

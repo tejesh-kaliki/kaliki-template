@@ -2,10 +2,14 @@
 // tests: a connection to the test database (docker/docker-compose-test.yaml),
 // migrations, and per-test truncation. Tests register real routes on a real
 // gin router and hit real endpoint paths.
+//
+// Each test package gets its OWN postgres schema (via search_path), so packages
+// run in parallel without colliding. Pass a unique schema name from TestMain.
 package testsupport
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,9 +17,16 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"{{ go_module_path }}/internal/database"
 )
+
+// TestDB is a per-package test database scoped to its own schema.
+type TestDB struct {
+	*database.DB
+	Schema string
+}
 
 // DatabaseURL is the test DB DSN. Override with TEST_DATABASE_URL in CI.
 func DatabaseURL() string {
@@ -23,16 +34,31 @@ func DatabaseURL() string {
 		"postgres://test_user:test_password@localhost:25432/test_db?sslmode=disable")
 }
 
-// MustConnect connects and applies migrations; for use from TestMain (no *T).
-func MustConnect() *database.DB {
-	db, err := database.Connect(context.Background(), DatabaseURL())
+// Connect creates (if needed) an isolated schema, routes the pool to it, and
+// applies migrations. Call once from TestMain with a package-unique schema name.
+func Connect(schema string) *TestDB {
+	ctx := context.Background()
+
+	cfg, err := pgxpool.ParseConfig(DatabaseURL())
+	if err != nil {
+		panic("parse test db url: " + err.Error())
+	}
+	// Every pooled connection lands in this package's schema first.
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema + ",public"
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		panic("connect test db (is docker/docker-compose-test.yaml up?): " + err.Error())
 	}
-	if err := db.Migrate(context.Background(), "../../sql/schema"); err != nil {
+	if _, err := pool.Exec(ctx, fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS %q`, schema)); err != nil {
+		panic("create test schema: " + err.Error())
+	}
+
+	db := &database.DB{Pool: pool}
+	if err := db.Migrate(ctx, "../../sql/schema"); err != nil {
 		panic("migrate test db: " + err.Error())
 	}
-	return db
+	return &TestDB{DB: db, Schema: schema}
 }
 
 // NewRouter returns a gin engine in test mode with an /api/v1 group.
@@ -43,12 +69,14 @@ func NewRouter() (*gin.Engine, *gin.RouterGroup) {
 	return r, r.Group("/api/v1")
 }
 
-// Truncate clears every table except the migration bookkeeping table.
-func Truncate(t *testing.T, db *database.DB) {
+// Truncate clears every table in this package's schema except the migration
+// bookkeeping table.
+func (tdb *TestDB) Truncate(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	rows, err := db.Pool.Query(ctx,
-		`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'`)
+	rows, err := tdb.Pool.Query(ctx,
+		`SELECT tablename FROM pg_tables WHERE schemaname = $1 AND tablename <> 'schema_migrations'`,
+		tdb.Schema)
 	if err != nil {
 		t.Fatalf("list tables: %v", err)
 	}
@@ -59,26 +87,20 @@ func Truncate(t *testing.T, db *database.DB) {
 			rows.Close()
 			t.Fatalf("scan table: %v", err)
 		}
-		tables = append(tables, name)
+		tables = append(tables, fmt.Sprintf("%q.%q", tdb.Schema, name))
 	}
 	rows.Close()
 	if len(tables) == 0 {
 		return
 	}
-	if _, err := db.Pool.Exec(ctx, "TRUNCATE "+strings.Join(tables, ", ")+" CASCADE"); err != nil {
+	if _, err := tdb.Pool.Exec(ctx, "TRUNCATE "+strings.Join(tables, ", ")+" CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
 
 // DoJSON performs a request with an optional JSON body and returns the recorder.
 func DoJSON(r http.Handler, method, path, body string) *httptest.ResponseRecorder {
-	var reader *strings.Reader
-	if body == "" {
-		reader = strings.NewReader("")
-	} else {
-		reader = strings.NewReader(body)
-	}
-	req := httptest.NewRequest(method, path, reader)
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

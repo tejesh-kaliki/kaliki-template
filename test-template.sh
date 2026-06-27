@@ -37,7 +37,7 @@ for combo in "${COMBOS[@]}"; do
   uvx copier copy --defaults --trust $flags "$ROOT" "$WORK/$name"
 
   echo "==> backend build + test: $name"
-  ( cd "$WORK/$name/backend" && go build ./... && go test -p 1 ./... )
+  ( cd "$WORK/$name/backend" && go build ./... && go test ./... )
 
   echo "==> api spec build: $name"
   ( cd "$WORK/$name/api" && npm install --silent && npm run build:local )
