@@ -7,8 +7,9 @@ OAPI_VERSION := v2.4.1
 build:
 	go build -o bin/server ./cmd/server
 
+# -p 1 serializes packages: integration tests share one test database.
 test:
-	go test ./...
+	go test -p 1 ./...
 
 # Regenerate all code from sql/queries and api/services specs.
 generate: sqlc oapi

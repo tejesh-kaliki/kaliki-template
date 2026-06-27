@@ -1,0 +1,33 @@
+package auth_test
+
+import (
+	"os"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	"{{ go_module_path }}/internal/auth"
+	"{{ go_module_path }}/internal/config"
+	"{{ go_module_path }}/internal/database"
+	"{{ go_module_path }}/internal/testsupport"
+)
+
+var (
+	testDB *database.DB
+	router *gin.Engine
+)
+
+func TestMain(m *testing.M) {
+	testDB = testsupport.MustConnect()
+
+	r, api := testsupport.NewRouter()
+	auth.New(testDB, config.TokenConfig{Secret: "test-secret", ExpiryHours: 1}).Register(api)
+	router = r
+
+	os.Exit(m.Run())
+}
+
+func setupTest(t *testing.T) {
+	t.Helper()
+	testsupport.Truncate(t, testDB)
+}

@@ -1,0 +1,93 @@
+// Package testsupport provides shared helpers for integration-style handler
+// tests: a connection to the test database (docker/docker-compose-test.yaml),
+// migrations, and per-test truncation. Tests register real routes on a real
+// gin router and hit real endpoint paths.
+package testsupport
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+
+	"{{ go_module_path }}/internal/database"
+)
+
+// DatabaseURL is the test DB DSN. Override with TEST_DATABASE_URL in CI.
+func DatabaseURL() string {
+	return getenv("TEST_DATABASE_URL",
+		"postgres://test_user:test_password@localhost:25432/test_db?sslmode=disable")
+}
+
+// MustConnect connects and applies migrations; for use from TestMain (no *T).
+func MustConnect() *database.DB {
+	db, err := database.Connect(context.Background(), DatabaseURL())
+	if err != nil {
+		panic("connect test db (is docker/docker-compose-test.yaml up?): " + err.Error())
+	}
+	if err := db.Migrate(context.Background(), "../../sql/schema"); err != nil {
+		panic("migrate test db: " + err.Error())
+	}
+	return db
+}
+
+// NewRouter returns a gin engine in test mode with an /api/v1 group.
+func NewRouter() (*gin.Engine, *gin.RouterGroup) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(gin.Recovery())
+	return r, r.Group("/api/v1")
+}
+
+// Truncate clears every table except the migration bookkeeping table.
+func Truncate(t *testing.T, db *database.DB) {
+	t.Helper()
+	ctx := context.Background()
+	rows, err := db.Pool.Query(ctx,
+		`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'`)
+	if err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			t.Fatalf("scan table: %v", err)
+		}
+		tables = append(tables, name)
+	}
+	rows.Close()
+	if len(tables) == 0 {
+		return
+	}
+	if _, err := db.Pool.Exec(ctx, "TRUNCATE "+strings.Join(tables, ", ")+" CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+}
+
+// DoJSON performs a request with an optional JSON body and returns the recorder.
+func DoJSON(r http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	var reader *strings.Reader
+	if body == "" {
+		reader = strings.NewReader("")
+	} else {
+		reader = strings.NewReader(body)
+	}
+	req := httptest.NewRequest(method, path, reader)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func getenv(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
+	}
+	return fallback
+}

@@ -63,6 +63,27 @@ logic — extend them for your product:
 {% endif %}Each is constructed in `internal/server/server.go`; inject it into the domains
 that need it.
 
+## Testing
+
+Integration-style handler tests register real routes on a real gin router and
+hit real endpoint paths, verifying DB state (not just HTTP status). They run
+against a throwaway postgres.
+
+```sh
+# start the test database
+docker compose -f backend/docker/docker-compose-test.yaml up -d
+
+# run tests (-p 1 serializes packages; they share one test DB)
+cd backend && TEST_DATABASE_URL="postgres://test_user:test_password@localhost:25432/test_db?sslmode=disable" \
+  go test -p 1 ./...
+# or: make test
+```
+
+Conventions: one top-level `Test<OperationId>` per OpenAPI operation; subtests
+in the order `success`, `authorization`, `validation`, `not_found`, `conflict`.
+Shared helpers live in `internal/testsupport`. See `internal/items` and
+`internal/auth` for worked examples.
+
 ## Observability
 
 Always-on, no-op by default. Configure `observability.endpoint` to export.

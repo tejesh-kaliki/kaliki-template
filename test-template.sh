@@ -1,11 +1,28 @@
 #!/usr/bin/env bash
 # Local mirror of template-ci: render representative combos, build + test the
-# backend, and build the API spec for each. Docker smoke-tests the default combo.
+# backend (against a throwaway postgres), and build the API spec for each.
+# Docker smoke-tests the default combo's full compose stack.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+TESTPG="kaliki-template-testpg"
+
+cleanup() {
+  docker rm -f "$TESTPG" >/dev/null 2>&1 || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
+
+echo "==> starting throwaway test postgres on :25432"
+docker rm -f "$TESTPG" >/dev/null 2>&1 || true
+docker run -d --name "$TESTPG" \
+  -e POSTGRES_USER=test_user -e POSTGRES_PASSWORD=test_password -e POSTGRES_DB=test_db \
+  -p 25432:5432 postgres:17-alpine >/dev/null
+export TEST_DATABASE_URL="postgres://test_user:test_password@localhost:25432/test_db?sslmode=disable"
+for i in $(seq 1 30); do
+  docker exec "$TESTPG" pg_isready -U test_user >/dev/null 2>&1 && break; sleep 1
+done
 
 # name|flags
 COMBOS=(
@@ -20,22 +37,20 @@ for combo in "${COMBOS[@]}"; do
   uvx copier copy --defaults --trust $flags "$ROOT" "$WORK/$name"
 
   echo "==> backend build + test: $name"
-  ( cd "$WORK/$name/backend" && go build ./... && go test ./... )
+  ( cd "$WORK/$name/backend" && go build ./... && go test -p 1 ./... )
 
   echo "==> api spec build: $name"
   ( cd "$WORK/$name/api" && npm install --silent && npm run build:local )
 done
 
 if [[ "${SKIP_DOCKER:-}" != "1" ]]; then
-  echo "==> docker compose up (default) + smoke endpoints"
+  echo "==> docker compose up (default) + smoke"
   cd "$WORK/default"
   cp .env.example .env
   docker compose up --build -d
   for i in $(seq 1 40); do curl -fsS localhost:8080/health >/dev/null 2>&1 && break; sleep 2; done
   echo "-- health:"; curl -fsS localhost:8080/health; echo
   docker compose down -v
-else
-  echo "==> skipped docker (SKIP_DOCKER=1)"
 fi
 
 echo "==> OK"

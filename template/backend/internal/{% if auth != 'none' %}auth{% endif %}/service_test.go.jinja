@@ -1,0 +1,185 @@
+package auth_test
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"testing"
+
+	"{{ go_module_path }}/internal/testsupport"
+)
+
+func decode(t *testing.T, b []byte) map[string]any {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("decode: %v (%s)", err, string(b))
+	}
+	return m
+}
+
+func TestSignup(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		setupTest(t)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"a@b.com","password":"password123","name":"A"}`)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("status = %d, want 201 (%s)", w.Code, w.Body.String())
+		}
+		body := decode(t, w.Body.Bytes())
+		if body["token"] == "" || body["token"] == nil {
+			t.Fatal("expected a session token")
+		}
+
+		// Password must be stored hashed, never in plaintext.
+		var hash string
+		if err := testDB.Pool.QueryRow(context.Background(),
+			`SELECT password_hash FROM users WHERE email = $1`, "a@b.com").Scan(&hash); err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		if hash == "" || hash == "password123" {
+			t.Fatalf("password not hashed: %q", hash)
+		}
+{%- if auth == 'jwt-full' %}
+		if body["verify_token"] == nil || body["verify_token"] == "" {
+			t.Fatal("expected a verify_token for unverified signup")
+		}
+{%- endif %}
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		setupTest(t)
+
+		testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"dup@b.com","password":"password123"}`)
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"dup@b.com","password":"password123"}`)
+		if w.Code != http.StatusConflict {
+			t.Fatalf("status = %d, want 409", w.Code)
+		}
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		setupTest(t)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"a@b.com","password":"short"}`)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", w.Code)
+		}
+	})
+}
+
+func TestLogin(t *testing.T) {
+	signup := func() {
+		testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"u@b.com","password":"password123"}`)
+	}
+
+	t.Run("success", func(t *testing.T) {
+		setupTest(t)
+		signup()
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/login",
+			`{"email":"u@b.com","password":"password123"}`)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (%s)", w.Code, w.Body.String())
+		}
+		if decode(t, w.Body.Bytes())["token"] == nil {
+			t.Fatal("expected a token")
+		}
+	})
+
+	t.Run("authorization", func(t *testing.T) {
+		setupTest(t)
+		signup()
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/login",
+			`{"email":"u@b.com","password":"wrongpass"}`)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401", w.Code)
+		}
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		setupTest(t)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/login", `{}`)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", w.Code)
+		}
+	})
+}
+{%- if auth == 'jwt-full' %}
+
+func TestVerifyEmail(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		setupTest(t)
+
+		s := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"v@b.com","password":"password123"}`)
+		verifyToken := decode(t, s.Body.Bytes())["verify_token"].(string)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/verify",
+			`{"token":"`+verifyToken+`"}`)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (%s)", w.Code, w.Body.String())
+		}
+
+		var verified bool
+		if err := testDB.Pool.QueryRow(context.Background(),
+			`SELECT verified FROM users WHERE email = $1`, "v@b.com").Scan(&verified); err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		if !verified {
+			t.Fatal("user should be verified")
+		}
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		setupTest(t)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/verify",
+			`{"token":"not-a-real-token"}`)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", w.Code)
+		}
+	})
+}
+
+func TestConfirmPasswordReset(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		setupTest(t)
+
+		testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+			`{"email":"r@b.com","password":"password123"}`)
+		req := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/request",
+			`{"email":"r@b.com"}`)
+		resetToken := decode(t, req.Body.Bytes())["token"].(string)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/confirm",
+			`{"token":"`+resetToken+`","password":"newpassword123"}`)
+		if w.Code != http.StatusOK {
+			t.Fatalf("confirm status = %d, want 200 (%s)", w.Code, w.Body.String())
+		}
+
+		// New password works.
+		login := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/login",
+			`{"email":"r@b.com","password":"newpassword123"}`)
+		if login.Code != http.StatusOK {
+			t.Fatalf("login with new password = %d, want 200", login.Code)
+		}
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		setupTest(t)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/password-reset/confirm",
+			`{"token":"bad","password":"newpassword123"}`)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", w.Code)
+		}
+	})
+}
+{%- endif %}
