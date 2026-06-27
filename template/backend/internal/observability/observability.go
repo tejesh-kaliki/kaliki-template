@@ -1,25 +1,74 @@
-// Package observability provides first-class, opt-out tracing. By default it
-// installs a no-op tracer so the application runs with no external dependencies.
-// Point config.Observability.Endpoint at an OTel collector to start exporting.
+// Package observability wires OpenTelemetry tracing. By default (no endpoint) it
+// installs nothing, so the global tracer stays a no-op and the app runs with no
+// external dependencies. Point config.Observability.Endpoint at an OTLP/gRPC
+// collector (host:port) to export traces; otelgin and otelpgx then light up.
 package observability
 
-import "log"
+import (
+	"context"
+	"log"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+)
 
 type Provider struct {
-	enabled bool
+	tp *sdktrace.TracerProvider
 }
 
-// Init returns a Provider. When endpoint is empty the provider is a no-op.
+// Init configures the global tracer provider. When endpoint is empty it is a
+// no-op; otherwise it exports via OTLP/gRPC (insecure — front with a collector
+// or set up TLS for production).
 func Init(serviceName, endpoint string) *Provider {
 	if endpoint == "" {
 		log.Printf("observability: no-op tracer (set observability.endpoint to export)")
-		return &Provider{enabled: false}
+		return &Provider{}
 	}
-	// TODO: wire OTLP exporter (otelgin/otelpgx) when an endpoint is configured.
+
+	ctx := context.Background()
+	exp, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(endpoint),
+		otlptracegrpc.WithInsecure(),
+	)
+	if err != nil {
+		log.Printf("observability: exporter init failed (%v); continuing without export", err)
+		return &Provider{}
+	}
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(attribute.String("service.name", serviceName)),
+	)
+	if err != nil {
+		log.Printf("observability: resource init failed (%v); using default", err)
+		res = resource.Default()
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exp),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{},
+	))
+
 	log.Printf("observability: exporting traces for %q to %s", serviceName, endpoint)
-	return &Provider{enabled: true}
+	return &Provider{tp: tp}
 }
 
-func (p *Provider) Enabled() bool { return p.enabled }
-
-func (p *Provider) Shutdown() {}
+// Shutdown flushes and stops the exporter. Safe to call on a no-op provider.
+func (p *Provider) Shutdown() {
+	if p.tp == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := p.tp.Shutdown(ctx); err != nil {
+		log.Printf("observability: shutdown: %v", err)
+	}
+}

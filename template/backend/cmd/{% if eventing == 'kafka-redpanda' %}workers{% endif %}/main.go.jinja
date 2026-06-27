@@ -10,6 +10,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"{{ go_module_path }}/internal/config"
@@ -24,7 +26,8 @@ const (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	cfgPath := os.Getenv("CONFIG_PATH")
 	if cfgPath == "" {
@@ -57,7 +60,15 @@ func main() {
 		}
 		// Only idle when there was nothing to do; otherwise drain quickly.
 		if n == 0 {
-			time.Sleep(idlePeriod)
+			select {
+			case <-ctx.Done():
+				log.Println("outbox relay stopped")
+				return
+			case <-time.After(idlePeriod):
+			}
+		} else if ctx.Err() != nil {
+			log.Println("outbox relay stopped")
+			return
 		}
 	}
 }

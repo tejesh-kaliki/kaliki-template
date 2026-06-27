@@ -38,6 +38,11 @@ services:
       - --advertise-kafka-addr PLAINTEXT://redpanda:9092
     ports:
       - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 {%- endif %}
 {%- if auth == 'jwt-full' and mailer %}
 
@@ -55,6 +60,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-{{ db_name }}}?sslmode=disable
       SERVER_PORT: "8080"
+      APP_ENV: ${APP_ENV:-development}
 {%- if auth != 'none' %}
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
 {%- endif %}
@@ -78,6 +84,10 @@ services:
         condition: service_healthy
 {%- if caching == 'redis' %}
       redis:
+        condition: service_healthy
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+      redpanda:
         condition: service_healthy
 {%- endif %}
 {%- if auth == 'jwt-full' and mailer %}

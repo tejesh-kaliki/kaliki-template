@@ -18,13 +18,15 @@ no-op default.
 
 ## What you get
 
-- **Backend** — Go (gin + pgx), config-from-YAML, auto-migrations on startup,
-  first-class observability (no-op until configured), one example domain.
+- **Backend** — Go (gin + pgx), config-from-YAML, goose migrations on startup,
+  timeouts + graceful shutdown, and one example domain.
+- **Observability** — OpenTelemetry tracing via `otelgin` + `otelpgx`, no-op
+  until you point `observability.endpoint` at an OTLP/gRPC collector.
 - **API** — OpenAPI specs as the contract source of truth.
-- **Frontend** — Flutter (Riverpod + GoRouter); `shared_ui` vendored or as a
-  git dependency.
-- **Docker** — `docker compose up --build` brings up postgres (+redis/redpanda
-  per flags) and the backend together.
+- **Frontend** — Flutter (Riverpod + GoRouter) with a working auth flow and
+  local widgets.
+- **Docker** — `docker compose up --build` brings up postgres (+redis/redpanda/
+  mailpit per flags) and the backend together.
 
 ## Test the template
 
@@ -54,6 +56,11 @@ verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml
       widgets (no shared_ui package — extract one by hand if a 2nd app needs it)
 - [x] API client generated via a swagger_parser fork supporting `x-dart-type`
       (`format: date` → `LocalDate`, not `DateTime`)
+- [x] goose migrations (per-file transactional), applied on startup and in tests
+- [x] OpenTelemetry tracing (otelgin + otelpgx), no-op until an OTLP/gRPC
+      endpoint is configured
+- [x] production hardening: HTTP server timeouts + signal-based graceful
+      shutdown; refuses the dev JWT secret when `APP_ENV=production`
 - [x] GitHub Actions matrix (renders + builds + tests minimal/default/full)
 - [x] integration-style handler tests for `items` + `auth` (real DB, worked
       examples in `internal/testsupport`)

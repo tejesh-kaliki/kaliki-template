@@ -2,6 +2,9 @@
 package config
 
 import (
+{%- if auth != 'none' %}
+	"errors"
+{%- endif %}
 	"os"
 {%- if auth == 'jwt-full' and mailer %}
 	"strconv"
@@ -136,7 +139,7 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Server:        ServerConfig{Port: "8080"},
 		Observability: ObservabilityConfig{ServiceName: "backend"},
-		Token:         TokenConfig{ExpiryHours: 24},
+		Token:         TokenConfig{ExpiryHours: 1, RefreshExpiryHours: 720},
 	}
 
 	if b, err := os.ReadFile(path); err == nil {
@@ -225,6 +228,15 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("S3_ENDPOINT"); v != "" {
 		cfg.Storage.Endpoint = v
+	}
+{%- endif %}
+{%- if auth != 'none' %}
+
+	// Fail fast if the insecure dev secret survived into a real deployment.
+	if os.Getenv("APP_ENV") == "production" &&
+		(cfg.Token.Secret == "" || cfg.Token.Secret == "dev-insecure-change-me") {
+		return nil, errors.New("refusing to start: set a strong JWT_SECRET " +
+			"(the dev default is not allowed when APP_ENV=production)")
 	}
 {%- endif %}
 

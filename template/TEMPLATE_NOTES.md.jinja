@@ -136,7 +136,18 @@ and parallel-safe. Graduate only if you hit real pain:
 
 ## Observability
 
-Always-on, no-op by default. Configure `observability.endpoint` to export.
+OpenTelemetry tracing is wired in: `otelgin` traces HTTP requests and `otelpgx`
+traces DB queries. It is a no-op until you set `observability.endpoint` (or
+`OTEL_EXPORTER_OTLP_ENDPOINT`) to an OTLP/**gRPC** collector `host:port` — then
+the global tracer provider exports via OTLP (insecure; front it with a collector
+or add TLS for production). Spans flush on graceful shutdown.
+
+## Migrations
+
+Schema migrations are goose files in `backend/sql/schema/` (`-- +goose Up` /
+`-- +goose Down`), applied on server startup and in tests. Each runs in its own
+transaction. Add one as `000N_name.sql` with a strictly increasing numeric
+prefix; sqlc reads the same files for type generation.
 
 {% if include_frontend -%}
 ## Frontend
