@@ -3,7 +3,7 @@ info:
   title: {{ project_name }} — items (EXAMPLE)
   version: 0.1.0
 paths:
-  /api/v1/items:
+  /items:
     get:
       operationId: listItems
       tags: [items]
@@ -39,7 +39,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Item"
-  /api/v1/items/{id}:
+  /items/{id}:
     get:
       operationId: getItem
       tags: [items]

@@ -1,0 +1,15 @@
+{
+  "name": "{{ project_slug }}-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenAPI specs for {{ project_name }} (source of truth for the API contract)",
+  "scripts": {
+    "build": "npm run build:local",
+    "build:local": "node scripts/build-spec.mjs config/servers-local.yaml",
+    "lint": "redocly lint openapi.yaml",
+    "preview": "npm run build:local && redocly preview-docs openapi.yaml"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.14.5"
+  }
+}

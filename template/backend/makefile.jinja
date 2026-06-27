@@ -1,0 +1,28 @@
+# Pinned codegen tool versions (run via `go run`, no global install needed).
+SQLC_VERSION := v1.27.0
+OAPI_VERSION := v2.4.1
+
+.PHONY: build test generate sqlc oapi
+
+build:
+	go build -o bin/server ./cmd/server
+
+test:
+	go test ./...
+
+# Regenerate all code from sql/queries and api/services specs.
+generate: sqlc oapi
+
+sqlc:
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
+
+# Auto-discovers every gen/api/<domain>/codegen.yaml and generates from the
+# matching ../api/services/<domain>.yaml. Add a domain by dropping in both files.
+oapi:
+	@for cfg in gen/api/*/codegen.yaml; do \
+		[ -e "$$cfg" ] || continue; \
+		name=$$(basename $$(dirname $$cfg)); \
+		echo "oapi: $$name"; \
+		go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_VERSION) \
+			--config "$$cfg" "../api/services/$$name.yaml"; \
+	done

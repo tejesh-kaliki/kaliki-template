@@ -3,9 +3,19 @@ _templates_suffix: .jinja
 _envops:
   keep_trailing_newline: true
 
-# Post-generation: resolve the Go module graph so `go.sum` exists and the Docker
-# build is reproducible. Requires Go on the host (the template targets Go devs).
+# Post-generation: run codegen, then resolve the Go module graph so `go.sum`
+# exists and the Docker build is reproducible. Requires Go on the host (the
+# template targets Go devs). Codegen tools are fetched via `go run`.
 _tasks:
+  - command: "go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.27.0 generate"
+    working_directory: "backend"
+    when: "{{ include_example_domain }}"
+  - command: >-
+      for cfg in gen/api/*/codegen.yaml; do [ -e "$cfg" ] || continue;
+      name=$(basename $(dirname "$cfg"));
+      go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
+      --config "$cfg" "../api/services/$name.yaml"; done
+    working_directory: "backend"
   - command: "go mod tidy"
     working_directory: "backend"
 

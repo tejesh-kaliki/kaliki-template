@@ -1,0 +1,10 @@
+swagger_parser:
+  input_folder: ../../api/
+  input_file: openapi.yaml
+  output_directory: lib/
+  language: dart
+  json_serializer: json_serializable
+  client_postfix: Client
+  use_freezed: false
+  enums_to_json: true
+  put_clients_in_folder: true

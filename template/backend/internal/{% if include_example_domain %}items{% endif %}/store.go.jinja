@@ -2,56 +2,28 @@ package items
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 
 	"{{ go_module_path }}/internal/database"
 )
 
-type Item struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
+// Store wraps the sqlc-generated queries. The Item type and the ListItems /
+// CreateItem / GetItem methods are generated from sql/queries/items.sql.
 type Store struct {
-	db *database.DB
+	q *database.Queries
 }
 
-func NewStore(db *database.DB) *Store { return &Store{db: db} }
+func NewStore(db *database.DB) *Store { return &Store{q: database.New(db.Pool)} }
 
-func (s *Store) List(ctx context.Context) ([]Item, error) {
-	rows, err := s.db.Pool.Query(ctx,
-		`SELECT id, name, created_at FROM items ORDER BY created_at DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	items := []Item{}
-	for rows.Next() {
-		var it Item
-		if err := rows.Scan(&it.ID, &it.Name, &it.CreatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, it)
-	}
-	return items, rows.Err()
+func (s *Store) List(ctx context.Context) ([]database.Item, error) {
+	return s.q.ListItems(ctx)
 }
 
-func (s *Store) Create(ctx context.Context, name string) (Item, error) {
-	var it Item
-	err := s.db.Pool.QueryRow(ctx,
-		`INSERT INTO items (name) VALUES ($1) RETURNING id, name, created_at`, name).
-		Scan(&it.ID, &it.Name, &it.CreatedAt)
-	return it, err
+func (s *Store) Create(ctx context.Context, name string) (database.Item, error) {
+	return s.q.CreateItem(ctx, name)
 }
 
-func (s *Store) Get(ctx context.Context, id uuid.UUID) (Item, error) {
-	var it Item
-	err := s.db.Pool.QueryRow(ctx,
-		`SELECT id, name, created_at FROM items WHERE id = $1`, id).
-		Scan(&it.ID, &it.Name, &it.CreatedAt)
-	return it, err
+func (s *Store) Get(ctx context.Context, id uuid.UUID) (database.Item, error) {
+	return s.q.GetItem(ctx, id)
 }
