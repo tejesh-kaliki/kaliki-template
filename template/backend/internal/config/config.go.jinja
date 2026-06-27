@@ -107,8 +107,11 @@ type StorageConfig struct {
 
 // TokenConfig holds JWT signing settings (used by the auth module).
 type TokenConfig struct {
-	Secret      string `yaml:"secret"`
-	ExpiryHours int    `yaml:"expiry_hours"`
+	Secret string `yaml:"secret"`
+	// ExpiryHours is the access-token TTL. Keep it short; clients refresh.
+	ExpiryHours int `yaml:"expiry_hours"`
+	// RefreshExpiryHours is the refresh-token TTL (defaults to 720h / 30 days).
+	RefreshExpiryHours int `yaml:"refresh_expiry_hours"`
 }
 
 type ServerConfig struct {

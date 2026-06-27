@@ -21,7 +21,7 @@ jobs:
           - name: default
             flags: ""
           - name: full
-            flags: "-d eventing=kafka-redpanda -d payments=razorpay -d push_notifications=firebase -d object_storage=s3 -d include_secondary_frontend=true"
+            flags: "-d eventing=kafka-redpanda -d payments=razorpay -d push_notifications=firebase -d object_storage=s3"
     name: ${{ matrix.name }}
     services:
       postgres:

@@ -41,6 +41,9 @@ func TestSignup(t *testing.T) {
 		if hash == "" || hash == "password123" {
 			t.Fatalf("password not hashed: %q", hash)
 		}
+		if body["refresh_token"] == "" || body["refresh_token"] == nil {
+			t.Fatal("expected a refresh token")
+		}
 {%- if auth == 'jwt-full' %}
 		// The verification credential is emailed, never returned in the response.
 		if body["verify_token"] != nil {
@@ -112,6 +115,95 @@ func TestLogin(t *testing.T) {
 		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/login", `{}`)
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", w.Code)
+		}
+	})
+}
+
+// signupSession signs up and returns the (access, refresh) pair.
+func signupSession(t *testing.T, email string) (string, string) {
+	t.Helper()
+	w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/signup",
+		`{"email":"`+email+`","password":"password123"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("signup status = %d (%s)", w.Code, w.Body.String())
+	}
+	b := decode(t, w.Body.Bytes())
+	return b["token"].(string), b["refresh_token"].(string)
+}
+
+func TestGetCurrentUser(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		setupTest(t)
+		access, _ := signupSession(t, "me@b.com")
+
+		w := testsupport.DoJSONAuth(router, http.MethodGet, "/api/v1/auth/me", "", access)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (%s)", w.Code, w.Body.String())
+		}
+		if decode(t, w.Body.Bytes())["email"] != "me@b.com" {
+			t.Fatalf("unexpected user: %s", w.Body.String())
+		}
+	})
+
+	t.Run("authorization", func(t *testing.T) {
+		setupTest(t)
+
+		w := testsupport.DoJSON(router, http.MethodGet, "/api/v1/auth/me", "")
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401", w.Code)
+		}
+	})
+}
+
+func TestRefreshToken(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		setupTest(t)
+		_, refresh := signupSession(t, "rt@b.com")
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/refresh",
+			`{"refresh_token":"`+refresh+`"}`)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (%s)", w.Code, w.Body.String())
+		}
+		if decode(t, w.Body.Bytes())["token"] == nil {
+			t.Fatal("expected a new access token")
+		}
+
+		// Rotation: the old refresh token is revoked and cannot be reused.
+		reuse := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/refresh",
+			`{"refresh_token":"`+refresh+`"}`)
+		if reuse.Code != http.StatusUnauthorized {
+			t.Fatalf("reused refresh status = %d, want 401", reuse.Code)
+		}
+	})
+
+	t.Run("authorization", func(t *testing.T) {
+		setupTest(t)
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/refresh",
+			`{"refresh_token":"nope"}`)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401", w.Code)
+		}
+	})
+}
+
+func TestLogout(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		setupTest(t)
+		_, refresh := signupSession(t, "lo@b.com")
+
+		w := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/logout",
+			`{"refresh_token":"`+refresh+`"}`)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204 (%s)", w.Code, w.Body.String())
+		}
+
+		// The refresh token is revoked after logout.
+		after := testsupport.DoJSON(router, http.MethodPost, "/api/v1/auth/refresh",
+			`{"refresh_token":"`+refresh+`"}`)
+		if after.Code != http.StatusUnauthorized {
+			t.Fatalf("refresh after logout = %d, want 401", after.Code)
 		}
 	})
 }

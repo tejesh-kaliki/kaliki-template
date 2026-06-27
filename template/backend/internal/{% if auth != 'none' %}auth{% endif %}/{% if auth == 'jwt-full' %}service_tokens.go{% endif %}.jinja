@@ -3,19 +3,15 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 {%- if verification_method == 'otp' %}
 	"crypto/subtle"
-{%- endif %}
-	"encoding/hex"
-	"errors"
-{%- if verification_method == 'otp' %}
 	"fmt"
-{%- endif %}
-	"log"
-{%- if verification_method == 'otp' %}
 	"math/big"
+{%- else %}
+	"encoding/hex"
 {%- endif %}
+	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -79,7 +75,7 @@ func (s *Service) VerifyEmail(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load user"})
 		return
 	}
-	s.respondWithToken(c, http.StatusOK, verifiedUser)
+	s.respondWithSession(c, http.StatusOK, verifiedUser)
 }
 
 // RequestPasswordReset implements gen.ServerInterface. Always returns 200 so
@@ -222,9 +218,4 @@ func newCredential() (raw, hash string) {
 	raw = hex.EncodeToString(b)
 {%- endif %}
 	return raw, hashToken(raw)
-}
-
-func hashToken(raw string) string {
-	sum := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(sum[:])
 }

@@ -13,17 +13,9 @@ dependencies:
   riverpod_annotation: ^2.3.5
   go_router: ^14.0.0
   dio: ^5.4.0
+  flutter_secure_storage: ^9.2.2
   shared_api_client:
     path: ../packages/shared_api_client
-{%- if shared_ui_source == 'vendored' %}
-  shared_ui:
-    path: packages/shared_ui
-{%- else %}
-  shared_ui:
-    git:
-      url: {{ shared_ui_git_url }}
-      ref: {{ shared_ui_ref }}
-{%- endif %}
 
 dev_dependencies:
   flutter_test:

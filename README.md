@@ -12,8 +12,8 @@ uvx copier copy . ../my-app
 ```
 
 You'll be prompted for identity (name, Go module path, bundle id, db name) and
-module choices (auth, caching, eventing, payments, push, object storage,
-secondary frontend, example domain). Observability is always included with a
+module choices (auth, mailer, verification method, caching, eventing, payments,
+push, object storage, example domain). Observability is always included with a
 no-op default.
 
 ## What you get
@@ -41,24 +41,24 @@ verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml
 ### Done
 - [x] sqlc + oapi-codegen wiring (`items` is a full generated vertical slice)
 - [x] redocly auto-discovery spec build + Dart client regen script
-- [x] auth: JWT signup/login, email verification + password reset, argon2id
+- [x] auth: JWT signup/login, email verification + password reset, argon2id,
+      refresh-token rotation + revocation, and a protected `GET /auth/me`
 - [x] transactional email (`mailer` flag): SMTP + SES + log transports, Mailpit
       in the local stack; `verification_method` flag (OTP code vs token link).
       Credentials are emailed/logged, never returned in API responses
 - [x] Tier-2 modules: caching (redis), eventing (kafka + outbox), payments,
       push, object storage — integration points, gated by flags
+- [x] transactional outbox relay worker (`cmd/workers`) for eventing
+- [x] frontend auth flow: secure token storage, refresh interceptor, Riverpod
+      auth controller, GoRouter redirect, login/signup/home screens, local
+      widgets (no shared_ui package — extract one by hand if a 2nd app needs it)
+- [x] API client generated via a swagger_parser fork supporting `x-dart-type`
+      (`format: date` → `LocalDate`, not `DateTime`)
 - [x] GitHub Actions matrix (renders + builds + tests minimal/default/full)
 - [x] integration-style handler tests for `items` + `auth` (real DB, worked
       examples in `internal/testsupport`)
 
-### Not planned (for now)
-- shared_ui repo extraction — `shared_ui_source=git` flag exists; defer the
-  actual split until a second product consumes it.
-
 ### Possible next
-- transactional outbox relay worker (cmd/workers) for eventing
-- a worked example of a JWT-protected route (auth middleware exists but no
-  endpoint demonstrates it yet)
-- OTP brute-force protection (attempt counter / rate limiting)
-- refresh-token / revocation flow (JWT is currently stateless HS256, no refresh)
-- frontend auth screens (frontend is currently scaffold + generated client only)
+- OTP / auth-endpoint brute-force protection (rate limiting)
+- a worked example of a domain route behind `auth.Middleware()` (the middleware
+  and `/auth/me` exist; `items` is intentionally left public)

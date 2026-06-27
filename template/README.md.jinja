@@ -23,9 +23,6 @@ Postgres{% if caching == 'redis' %}, Redis{% endif %}{% if eventing == 'kafka-re
 {%- if include_frontend %}
 - `frontend/` — Flutter app (Riverpod + GoRouter).
 {%- endif %}
-{%- if include_secondary_frontend %}
-- `admin_frontend/` — secondary (admin) Flutter app.
-{%- endif %}
 
 ## Observability
 

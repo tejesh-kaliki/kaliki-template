@@ -4,6 +4,7 @@ package auth
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -17,26 +18,37 @@ import (
 )
 
 type Service struct {
-	store  *Store
-	tokens *TokenIssuer
+	store      *Store
+	tokens     *TokenIssuer
+	refreshTTL time.Duration
 {%- if auth == 'jwt-full' %}
 	mailer mail.Mailer
 {%- endif %}
 }
 
+func refreshTTL(cfg config.TokenConfig) time.Duration {
+	h := cfg.RefreshExpiryHours
+	if h == 0 {
+		h = 720 // 30 days
+	}
+	return time.Duration(h) * time.Hour
+}
+
 {% if auth == 'jwt-full' -%}
 func New(db *database.DB, cfg config.TokenConfig, mailer mail.Mailer) *Service {
 	return &Service{
-		store:  NewStore(db),
-		tokens: NewTokenIssuer(cfg),
-		mailer: mailer,
+		store:      NewStore(db),
+		tokens:     NewTokenIssuer(cfg),
+		refreshTTL: refreshTTL(cfg),
+		mailer:     mailer,
 	}
 }
 {%- else -%}
 func New(db *database.DB, cfg config.TokenConfig) *Service {
 	return &Service{
-		store:  NewStore(db),
-		tokens: NewTokenIssuer(cfg),
+		store:      NewStore(db),
+		tokens:     NewTokenIssuer(cfg),
+		refreshTTL: refreshTTL(cfg),
 	}
 }
 {%- endif %}
@@ -85,7 +97,7 @@ func (s *Service) Signup(c *gin.Context) {
 	}
 	s.sendVerification(c.Request.Context(), user.Email, credential)
 {%- endif %}
-	s.respondWithToken(c, http.StatusCreated, user)
+	s.respondWithSession(c, http.StatusCreated, user)
 }
 
 // Login implements gen.ServerInterface.
@@ -110,16 +122,7 @@ func (s *Service) Login(c *gin.Context) {
 		return
 	}
 
-	s.respondWithToken(c, http.StatusOK, user)
-}
-
-func (s *Service) respondWithToken(c *gin.Context, status int, user database.User) {
-	token, err := s.tokens.Issue(user.ID.String(), user.Role)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not issue token"})
-		return
-	}
-	c.JSON(status, gen.AuthResponse{Token: token, User: toAPIUser(user)})
+	s.respondWithSession(c, http.StatusOK, user)
 }
 
 func toAPIUser(u database.User) gen.User {

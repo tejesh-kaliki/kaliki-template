@@ -100,8 +100,16 @@ func (tdb *TestDB) Truncate(t *testing.T) {
 
 // DoJSON performs a request with an optional JSON body and returns the recorder.
 func DoJSON(r http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	return DoJSONAuth(r, method, path, body, "")
+}
+
+// DoJSONAuth is DoJSON with a Bearer token (omitted when token is empty).
+func DoJSONAuth(r http.Handler, method, path, body, token string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w

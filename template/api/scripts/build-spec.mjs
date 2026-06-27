@@ -4,9 +4,10 @@
 // services/<domain>.yaml and rebuild.
 //
 // Usage: node scripts/build-spec.mjs [config/servers-<env>.yaml] [-o openapi.yaml]
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import YAML from "yaml";
 
 const serverConfig = process.argv[2] || "config/servers-local.yaml";
 const output = process.argv[4] || "openapi.yaml";
@@ -36,3 +37,22 @@ execFileSync(
   ["redocly", "join", serverConfig, ...files, "-o", output],
   { stdio: "inherit" },
 );
+
+// Post-process: `redocly join` pushes an (empty) `servers: []` onto every path
+// and operation to record provenance. That trips up some OpenAPI consumers
+// (e.g. swagger_parser casts the node to a map). Strip the empty arrays and set
+// the top-level servers from the chosen config.
+const doc = YAML.parse(readFileSync(output, "utf8"));
+const config = YAML.parse(readFileSync(serverConfig, "utf8"));
+if (config.servers) doc.servers = config.servers;
+
+const methods = ["get", "post", "put", "delete", "patch", "options", "head", "trace"];
+const isEmpty = (s) => Array.isArray(s) && s.length === 0;
+for (const pathItem of Object.values(doc.paths ?? {})) {
+  if (isEmpty(pathItem.servers)) delete pathItem.servers;
+  for (const m of methods) {
+    if (pathItem[m] && isEmpty(pathItem[m].servers)) delete pathItem[m].servers;
+  }
+}
+writeFileSync(output, YAML.stringify(doc));
+console.log("Post-processing: set top-level servers, removed empty per-path servers.");

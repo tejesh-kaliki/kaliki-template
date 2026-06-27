@@ -1,10 +1,18 @@
 swagger_parser:
-  input_folder: ../../api/
-  input_file: openapi.yaml
-  output_directory: lib/
+  schema_path: ../../api/openapi.yaml
+  output_directory: lib
   language: dart
-  json_serializer: json_serializable
+  json_serializer: freezed
+  root_client: true
+  root_client_name: RestClient
   client_postfix: Client
-  use_freezed: false
-  enums_to_json: true
-  put_clients_in_folder: true
+  default_content_type: "application/json"
+  dio_options_parameter_by_default: true
+  export_file: true
+  put_in_folder: false
+  put_clients_in_folder: false
+  enums_to_json: false
+  enums_parent_prefix: true
+  unknown_enum_value: true
+  use_freezed3: true
+  mark_files_as_generated: true

@@ -71,11 +71,6 @@ include_frontend:
   help: Generate the primary Flutter app
   default: true
 
-include_secondary_frontend:
-  type: bool
-  help: Generate a second Flutter app (e.g. admin/back-office)
-  default: false
-
 include_example_domain:
   type: bool
   help: "Generate the disposable 'items' example domain (full vertical slice)"
@@ -148,27 +143,9 @@ object_storage:
     "S3-compatible": s3
   default: none
 
-# ─── Shared UI ───────────────────────────────────────────────────────────────
-shared_ui_source:
-  type: str
-  help: How the shared_ui design system is consumed
-  choices:
-    "Vendored (copied into repo, customizable)": vendored
-    "Git dependency (single source of truth)": git
-  default: vendored
-  when: "{{ include_frontend }}"
-
-shared_ui_git_url:
-  type: str
-  help: Git URL for shared_ui
-  default: "https://github.com/example/{{ project_slug }}-shared-ui.git"
-  when: "{{ include_frontend and shared_ui_source == 'git' }}"
-
-shared_ui_ref:
-  type: str
-  help: Git ref/tag to pin shared_ui to
-  default: main
-  when: "{{ include_frontend and shared_ui_source == 'git' }}"
+# A shared UI design-system package is intentionally NOT scaffolded. The
+# frontend ships a handful of local widgets in frontend/lib/widgets; extract a
+# real shared_ui package into its own repo once a second app needs it.
 
 # ─── Tooling (always-on, opt-out) ────────────────────────────────────────────
 agent_tooling:
