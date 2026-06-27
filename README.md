@@ -65,7 +65,38 @@ verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml
 - [x] integration-style handler tests for `items` + `auth` (real DB, worked
       examples in `internal/testsupport`)
 
-### Possible next
-- OTP / auth-endpoint brute-force protection (rate limiting)
-- a worked example of a domain route behind `auth.Middleware()` (the middleware
-  and `/auth/me` exist; `items` is intentionally left public)
+### Known gaps / possible next
+
+Ordered roughly by payoff for a fresh project.
+
+**Operational**
+- **Structured logging.** Everything uses `log.Printf` + `gin.Default()`'s text
+  logger. Ship `slog` (JSON handler) with request-id propagation so logs are
+  queryable and correlate with traces.
+- **Metrics + real health checks.** Tracing is wired but there's no meter
+  provider / `/metrics` (Prometheus). `/health` returns `ok` unconditionally —
+  split into liveness (`/health`, static) vs readiness (`/ready`, pings the
+  pool + redis).
+- **Rate limiting / brute-force protection** on `login`/`signup`/`reset`. Redis
+  is already in the default stack — a per-IP + per-account limiter middleware is
+  low effort, high value.
+
+**Correctness / DX**
+- **Lint in CI.** CI builds + tests but runs no `go vet` / `golangci-lint` /
+  `staticcheck` / `gofmt -l` / `sqlc vet`, and the frontend only runs
+  `flutter analyze` (no `flutter test`).
+- **OpenAPI request validation.** oapi-codegen generates types but the spec is
+  not enforced at runtime — wire `kin-openapi` validation middleware, or accept
+  that handlers validate by hand and the spec is documentation only.
+- **Worked example of a protected domain route.** `auth.Middleware()` and
+  `/auth/me` exist, but `items` is intentionally public — there's no reference
+  for auth-gated domain CRUD (the most-copied pattern in a real app).
+
+**Lower priority / scope calls**
+- No dependency automation (Dependabot/Renovate) — generated repos drift on
+  pinned Go/npm/Flutter/action versions.
+- No frontend deploy story (web build target / Dockerfile); backend is fully
+  containerized, the Flutter side is not.
+- DB connection pool is not tunable via config (`max_conns`, timeouts).
+- `distroless/static` ships CA certs but no `tzdata` — timezone-aware formatting
+  is UTC-only unless `time/tzdata` is imported.
