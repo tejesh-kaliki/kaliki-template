@@ -42,6 +42,9 @@ verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml
 - [x] sqlc + oapi-codegen wiring (`items` is a full generated vertical slice)
 - [x] redocly auto-discovery spec build + Dart client regen script
 - [x] auth: JWT signup/login, email verification + password reset, argon2id
+- [x] transactional email (`mailer` flag): SMTP + SES + log transports, Mailpit
+      in the local stack; `verification_method` flag (OTP code vs token link).
+      Credentials are emailed/logged, never returned in API responses
 - [x] Tier-2 modules: caching (redis), eventing (kafka + outbox), payments,
       push, object storage — integration points, gated by flags
 - [x] GitHub Actions matrix (renders + builds + tests minimal/default/full)
@@ -54,3 +57,8 @@ verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml
 
 ### Possible next
 - transactional outbox relay worker (cmd/workers) for eventing
+- a worked example of a JWT-protected route (auth middleware exists but no
+  endpoint demonstrates it yet)
+- OTP brute-force protection (attempt counter / rate limiting)
+- refresh-token / revocation flow (JWT is currently stateless HS256, no refresh)
+- frontend auth screens (frontend is currently scaffold + generated client only)
