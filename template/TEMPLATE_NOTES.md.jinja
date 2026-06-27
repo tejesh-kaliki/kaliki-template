@@ -47,6 +47,22 @@ client bundle and docs, adopt the split-spec pattern:
 This is documentation-only here — wire it when the admin app needs it. Note it
 hides endpoints from the bundle, it is **not** a substitute for authz.
 
+## Tier-2 modules
+
+These are wired as integration points (client init + config), not full business
+logic — extend them for your product:
+
+{% if caching == 'redis' %}- `internal/cache` — Redis client (request-time caching).
+{% endif %}{% if eventing == 'kafka-redpanda' %}- `internal/events` — Kafka/Redpanda publisher. Use the `outbox` table for
+  transactional, at-least-once delivery (write events in the same tx as the
+  domain change, then relay rows where `published_at IS NULL`).
+{% endif %}{% if payments == 'razorpay' %}- `internal/payments` — Razorpay client. Add orders/webhooks/subscriptions.
+{% endif %}{% if push_notifications == 'firebase' %}- `internal/push` — Firebase Cloud Messaging. Set `firebase.credentials_file`.
+{% endif %}{% if object_storage == 's3' %}- `internal/storage` — S3-compatible object store. Use `PresignPut`/presigned
+  URLs; follow ownership prefixes (`users/<id>/...`, etc.).
+{% endif %}Each is constructed in `internal/server/server.go`; inject it into the domains
+that need it.
+
 ## Observability
 
 Always-on, no-op by default. Configure `observability.endpoint` to export.

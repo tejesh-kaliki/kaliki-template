@@ -19,6 +19,21 @@ import (
 {%- if auth != 'none' %}
 	"{{ go_module_path }}/internal/auth"
 {%- endif %}
+{%- if caching == 'redis' %}
+	"{{ go_module_path }}/internal/cache"
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+	"{{ go_module_path }}/internal/events"
+{%- endif %}
+{%- if payments == 'razorpay' %}
+	"{{ go_module_path }}/internal/payments"
+{%- endif %}
+{%- if push_notifications == 'firebase' %}
+	"{{ go_module_path }}/internal/push"
+{%- endif %}
+{%- if object_storage == 's3' %}
+	"{{ go_module_path }}/internal/storage"
+{%- endif %}
 )
 
 func Run() {
@@ -49,6 +64,40 @@ func Run() {
 	if err := db.Migrate(ctx, migrationsDir); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
+{%- if caching == 'redis' %}
+
+	redisCache, err := cache.Connect(ctx, cfg.Redis)
+	if err != nil {
+		log.Fatalf("redis: %v", err)
+	}
+	defer redisCache.Close()
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+
+	publisher := events.NewPublisher(cfg.Kafka)
+	defer publisher.Close()
+{%- endif %}
+{%- if payments == 'razorpay' %}
+
+	paymentsSvc := payments.New(cfg.Razorpay)
+	_ = paymentsSvc // inject into the domains that take payments
+{%- endif %}
+{%- if push_notifications == 'firebase' %}
+
+	pushSvc, err := push.New(ctx, cfg.Firebase)
+	if err != nil {
+		log.Printf("push: disabled (%v)", err)
+	}
+	_ = pushSvc // inject into the domains that send notifications
+{%- endif %}
+{%- if object_storage == 's3' %}
+
+	storageSvc, err := storage.New(ctx, cfg.Storage)
+	if err != nil {
+		log.Printf("storage: disabled (%v)", err)
+	}
+	_ = storageSvc // inject into the domains that store files
+{%- endif %}
 
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) {

@@ -1,0 +1,153 @@
+// Package config loads runtime configuration from a YAML file with env overrides.
+package config
+
+import (
+	"os"
+{%- if eventing == 'kafka-redpanda' %}
+	"strings"
+{%- endif %}
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Server        ServerConfig        `yaml:"server"`
+	Database      DatabaseConfig      `yaml:"database"`
+	Observability ObservabilityConfig `yaml:"observability"`
+	Token         TokenConfig         `yaml:"token"`
+{%- if caching == 'redis' %}
+	Redis         RedisConfig         `yaml:"redis"`
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+	Kafka         KafkaConfig         `yaml:"kafka"`
+{%- endif %}
+{%- if payments == 'razorpay' %}
+	Razorpay      RazorpayConfig      `yaml:"razorpay"`
+{%- endif %}
+{%- if push_notifications == 'firebase' %}
+	Firebase      FirebaseConfig      `yaml:"firebase"`
+{%- endif %}
+{%- if object_storage == 's3' %}
+	Storage       StorageConfig       `yaml:"storage"`
+{%- endif %}
+}
+{%- if caching == 'redis' %}
+
+type RedisConfig struct {
+	URL string `yaml:"url"`
+}
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+
+type KafkaConfig struct {
+	Brokers []string `yaml:"brokers"`
+}
+{%- endif %}
+{%- if payments == 'razorpay' %}
+
+type RazorpayConfig struct {
+	KeyID     string `yaml:"key_id"`
+	KeySecret string `yaml:"key_secret"`
+}
+{%- endif %}
+{%- if push_notifications == 'firebase' %}
+
+type FirebaseConfig struct {
+	CredentialsFile string `yaml:"credentials_file"`
+}
+{%- endif %}
+{%- if object_storage == 's3' %}
+
+type StorageConfig struct {
+	Region   string `yaml:"region"`
+	Bucket   string `yaml:"bucket"`
+	Endpoint string `yaml:"endpoint"` // optional, for S3-compatible services
+}
+{%- endif %}
+
+// TokenConfig holds JWT signing settings (used by the auth module).
+type TokenConfig struct {
+	Secret      string `yaml:"secret"`
+	ExpiryHours int    `yaml:"expiry_hours"`
+}
+
+type ServerConfig struct {
+	Port string `yaml:"port"`
+}
+
+type DatabaseConfig struct {
+	URL string `yaml:"url"`
+}
+
+// ObservabilityConfig is wired in by default. Leaving Endpoint empty selects a
+// no-op tracer, so the app runs with zero external dependencies until you point
+// it at a real OTel collector.
+type ObservabilityConfig struct {
+	ServiceName string `yaml:"service_name"`
+	Endpoint    string `yaml:"endpoint"`
+}
+
+// Load reads the YAML at path, then applies env overrides for anything that is
+// commonly injected by the deployment environment.
+func Load(path string) (*Config, error) {
+	cfg := &Config{
+		Server:        ServerConfig{Port: "8080"},
+		Observability: ObservabilityConfig{ServiceName: "backend"},
+		Token:         TokenConfig{ExpiryHours: 24},
+	}
+
+	if b, err := os.ReadFile(path); err == nil {
+		if err := yaml.Unmarshal(b, cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	if v := os.Getenv("SERVER_PORT"); v != "" {
+		cfg.Server.Port = v
+	}
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		cfg.Database.URL = v
+	}
+	if v := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
+		cfg.Observability.Endpoint = v
+	}
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		cfg.Token.Secret = v
+	}
+{%- if caching == 'redis' %}
+	if v := os.Getenv("REDIS_URL"); v != "" {
+		cfg.Redis.URL = v
+	}
+{%- endif %}
+{%- if eventing == 'kafka-redpanda' %}
+	if v := os.Getenv("KAFKA_BROKERS"); v != "" {
+		cfg.Kafka.Brokers = strings.Split(v, ",")
+	}
+{%- endif %}
+{%- if payments == 'razorpay' %}
+	if v := os.Getenv("RAZORPAY_KEY_ID"); v != "" {
+		cfg.Razorpay.KeyID = v
+	}
+	if v := os.Getenv("RAZORPAY_KEY_SECRET"); v != "" {
+		cfg.Razorpay.KeySecret = v
+	}
+{%- endif %}
+{%- if push_notifications == 'firebase' %}
+	if v := os.Getenv("FIREBASE_CREDENTIALS_FILE"); v != "" {
+		cfg.Firebase.CredentialsFile = v
+	}
+{%- endif %}
+{%- if object_storage == 's3' %}
+	if v := os.Getenv("S3_BUCKET"); v != "" {
+		cfg.Storage.Bucket = v
+	}
+	if v := os.Getenv("S3_REGION"); v != "" {
+		cfg.Storage.Region = v
+	}
+	if v := os.Getenv("S3_ENDPOINT"); v != "" {
+		cfg.Storage.Endpoint = v
+	}
+{%- endif %}
+
+	return cfg, nil
+}
