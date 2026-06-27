@@ -16,13 +16,7 @@ generate: sqlc oapi
 sqlc:
 	go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
 
-# Auto-discovers every gen/api/<domain>/codegen.yaml and generates from the
-# matching ../api/services/<domain>.yaml. Add a domain by dropping in both files.
+# Runs every //go:generate directive (the per-domain gen/api/<domain>/generate.go
+# files). Add a domain by dropping in its codegen.yaml + generate.go.
 oapi:
-	@for cfg in gen/api/*/codegen.yaml; do \
-		[ -e "$$cfg" ] || continue; \
-		name=$$(basename $$(dirname $$cfg)); \
-		echo "oapi: $$name"; \
-		go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_VERSION) \
-			--config "$$cfg" "../api/services/$$name.yaml"; \
-	done
+	go generate ./...

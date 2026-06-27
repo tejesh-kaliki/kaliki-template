@@ -11,6 +11,13 @@ type Config struct {
 	Server        ServerConfig        `yaml:"server"`
 	Database      DatabaseConfig      `yaml:"database"`
 	Observability ObservabilityConfig `yaml:"observability"`
+	Token         TokenConfig         `yaml:"token"`
+}
+
+// TokenConfig holds JWT signing settings (used by the auth module).
+type TokenConfig struct {
+	Secret      string `yaml:"secret"`
+	ExpiryHours int    `yaml:"expiry_hours"`
 }
 
 type ServerConfig struct {
@@ -35,6 +42,7 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Server:        ServerConfig{Port: "8080"},
 		Observability: ObservabilityConfig{ServiceName: "backend"},
+		Token:         TokenConfig{ExpiryHours: 24},
 	}
 
 	if b, err := os.ReadFile(path); err == nil {
@@ -51,6 +59,9 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
 		cfg.Observability.Endpoint = v
+	}
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		cfg.Token.Secret = v
 	}
 
 	return cfg, nil

@@ -59,7 +59,7 @@ func Run() {
 	api := r.Group("/api/v1")
 {%- endif %}
 {%- if auth != 'none' %}
-	auth.New(db).Register(api)
+	auth.New(db, cfg.Token).Register(api)
 {%- endif %}
 {%- if include_example_domain %}
 	items.New(db).Register(api)
