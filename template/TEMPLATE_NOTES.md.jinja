@@ -149,6 +149,39 @@ Schema migrations are goose files in `backend/sql/schema/` (`-- +goose Up` /
 transaction. Add one as `000N_name.sql` with a strictly increasing numeric
 prefix; sqlc reads the same files for type generation.
 
+### Numbering
+
+The template files carry fixed prefixes (`0001`…`0006`) but are conditionally
+rendered, so turning a module off leaves **gaps** in the sequence (e.g. with
+`auth=none` you get `0001`, then `0005`). goose orders by version number and
+tolerates gaps, so this is purely cosmetic — **don't renumber to close them.**
+Migrations are append-only: when you add one, always pick a prefix **higher than
+the largest existing one**, and never rename or re-prefix a migration that has
+already been applied anywhere (goose tracks applied migrations by version, so a
+rename re-runs it or breaks startup).
+
+### Migrations are generate-once — exclude them from `copier update`
+
+Migrations are **not** kept in sync by `copier update`. They are an append-only
+ledger tied to your real database state, and letting the template re-merge them
+invites out-of-order application, rename churn, and schema drift between a
+from-scratch build and an updated project. Treat `backend/sql/schema/` as
+generated once, then owned entirely by this project.
+
+When you pull template updates, exclude the schema dir so the merge never
+touches it:
+
+```sh
+copier update --exclude 'backend/sql/schema/**'
+```
+
+If a new template **version** adds migrations of its own (check its changelog /
+release notes), don't let `copier update` apply them. Instead, **manually review
+the new files and re-create the ones you want** as fresh migrations with the
+next higher prefix in your own sequence. That keeps every migration strictly
+in-order for goose and avoids all of the out-of-order edge cases — at the cost
+of a manual check whenever the template ships schema changes.
+
 {% if include_frontend -%}
 ## Frontend
 
