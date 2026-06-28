@@ -13,12 +13,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Item"
+                $ref: "#/components/schemas/ItemList"
     post:
       operationId: createItem
       tags: [items]
@@ -27,11 +22,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name]
-              properties:
-                name:
-                  type: string
+              $ref: "#/components/schemas/CreateItemRequest"
       responses:
         "201":
           description: Created
@@ -72,3 +63,17 @@ components:
         created_at:
           type: string
           format: date-time
+    ItemList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Item"
+    CreateItemRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string

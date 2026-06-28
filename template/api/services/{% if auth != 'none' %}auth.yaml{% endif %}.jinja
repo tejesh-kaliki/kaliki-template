@@ -19,7 +19,11 @@ paths:
           content:
             application/json:
               schema:
+{%- if auth == 'jwt-full' and verification_method == 'otp' %}
+                $ref: "#/components/schemas/SignupResponse"
+{%- else %}
                 $ref: "#/components/schemas/AuthResponse"
+{%- endif %}
         "409":
           description: Email already registered
   /auth/login:
@@ -179,6 +183,20 @@ components:
           description: Long-lived, revocable refresh token. Rotated on each use.
         user:
           $ref: "#/components/schemas/User"
+{%- if auth == 'jwt-full' and verification_method == 'otp' %}
+    SignupResponse:
+      type: object
+      required: [user, verification_token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        verification_token:
+          type: string
+          description: >-
+            Short-lived token identifying the just-created (unverified) account.
+            Submit it with the emailed OTP to POST /auth/verify to obtain a
+            session. No access/refresh token is issued until the email is verified.
+{%- endif %}
     RefreshRequest:
       type: object
       required: [refresh_token]
@@ -210,11 +228,11 @@ components:
     VerifyRequest:
       type: object
 {%- if verification_method == 'otp' %}
-      required: [email, code]
+      required: [verification_token, code]
       properties:
-        email:
+        verification_token:
           type: string
-          format: email
+          description: Short-lived token returned by /auth/signup; scopes the OTP submission.
         code:
           type: string
 {%- else %}

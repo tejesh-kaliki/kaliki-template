@@ -96,6 +96,21 @@ func (s *Service) Signup(c *gin.Context) {
 		return
 	}
 	s.sendVerification(c.Request.Context(), user.Email, credential)
+{%- if verification_method == 'otp' %}
+
+	// No session yet: hand back only a short-lived token that scopes the OTP
+	// the user just received. They redeem both at POST /auth/verify.
+	verificationToken, err := s.tokens.IssueVerification(user.ID.String())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not issue verification token"})
+		return
+	}
+	c.JSON(http.StatusCreated, gen.SignupResponse{
+		User:              toAPIUser(user),
+		VerificationToken: verificationToken,
+	})
+	return
+{%- endif %}
 {%- endif %}
 	s.respondWithSession(c, http.StatusCreated, user)
 }

@@ -49,12 +49,17 @@ func (s *Service) VerifyEmail(c *gin.Context) {
 	}
 {%- if verification_method == 'otp' %}
 
-	user, err := s.store.GetUserByEmail(c.Request.Context(), string(body.Email))
+	subject, err := s.tokens.ParseVerification(body.VerificationToken)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired token"})
 		return
 	}
-	tok, err := s.consume(c.Request.Context(), user.ID, kindVerify, body.Code)
+	userID, err := uuid.Parse(subject)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired token"})
+		return
+	}
+	tok, err := s.consume(c.Request.Context(), userID, kindVerify, body.Code)
 {%- else %}
 
 	tok, err := s.consume(c.Request.Context(), body.Token, kindVerify)

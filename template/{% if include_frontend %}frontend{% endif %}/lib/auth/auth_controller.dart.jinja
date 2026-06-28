@@ -4,6 +4,23 @@ import 'package:shared_api_client/export.dart';
 import '../api/rest_client_provider.dart';
 
 part 'auth_controller.g.dart';
+{%- if auth == 'jwt-full' and verification_method == 'otp' %}
+
+/// A signup awaiting OTP verification: the email plus the short-lived token
+/// returned by /auth/signup, submitted together with the emailed code.
+typedef PendingVerification = ({String email, String token});
+
+/// Holds the pending verification between the signup and OTP screens. Null when
+/// nothing is awaiting verification.
+@Riverpod(keepAlive: true)
+class PendingVerificationController extends _$PendingVerificationController {
+  @override
+  PendingVerification? build() => null;
+
+  void set(PendingVerification value) => state = value;
+  void clear() => state = null;
+}
+{%- endif %}
 
 /// Holds the authenticated [User] (or null when signed out). On startup it
 /// tries to load the current user from a persisted token.
@@ -35,13 +52,43 @@ class AuthController extends _$AuthController {
   Future<void> signup(String email, String password, String? name) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
+{%- if auth == 'jwt-full' and verification_method == 'otp' %}
+      // Signup does not start a session. The backend emails a one-time code and
+      // returns a verification token; stash both and route to the OTP screen.
+      final resp = await ref.read(authClientProvider).signup(
+            body: SignupRequest(email: email, password: password, name: name),
+          );
+      ref
+          .read(pendingVerificationControllerProvider.notifier)
+          .set((email: email, token: resp.verificationToken));
+      return null; // still signed out until the OTP is verified
+{%- else %}
       final session = await ref.read(authClientProvider).signup(
             body: SignupRequest(email: email, password: password, name: name),
           );
       await _persist(session);
       return session.user;
+{%- endif %}
     });
   }
+{%- if auth == 'jwt-full' and verification_method == 'otp' %}
+
+  /// Submits the emailed OTP for the pending signup. On success the account is
+  /// verified, a session is persisted, and the user is signed in.
+  Future<void> verifyOtp(String code) async {
+    final pending = ref.read(pendingVerificationControllerProvider);
+    if (pending == null) return;
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final session = await ref.read(authClientProvider).verifyEmail(
+            body: VerifyRequest(verificationToken: pending.token, code: code),
+          );
+      await _persist(session);
+      ref.read(pendingVerificationControllerProvider.notifier).clear();
+      return session.user;
+    });
+  }
+{%- endif %}
 
   Future<void> logout() async {
     final storage = ref.read(tokenStorageProvider);
