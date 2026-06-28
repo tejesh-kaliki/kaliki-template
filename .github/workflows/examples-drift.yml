@@ -1,0 +1,44 @@
+name: examples-drift
+
+# Cheap per-PR gate (~1-2 min, no DB, no build). Re-renders the committed
+# snapshots + regenerates the docs and fails if anything drifts from what's
+# checked in. The heavy build/test matrix runs nightly (see validate.yml) and
+# locally pre-push (see Makefile / .githooks/pre-push) — keeping per-PR minutes
+# minimal on the free tier.
+
+on:
+  pull_request:
+    paths:
+      - "template/**"
+      - "copier.yml"
+      - "examples/**"
+      - "scripts/**"
+
+# Cancel superseded runs when a PR is pushed again — the biggest minute-saver.
+concurrency:
+  group: examples-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Regenerate snapshots + docs
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv tool install copier
+          pip install pyyaml
+          bash scripts/render-examples.sh
+          bash scripts/gen-example-docs.sh
+
+      - name: Fail if anything drifted
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::examples/docs are stale. Run scripts/render-examples.sh"
+            echo "and scripts/gen-example-docs.sh, then commit the result."
+            git --no-pager diff --stat
+            exit 1
+          fi

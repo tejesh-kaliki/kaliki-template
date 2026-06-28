@@ -1,0 +1,29 @@
+# Profile: jwt-full-otp
+#
+# The default answers from copier.yml. The most-trafficked combination, so it is
+# the primary regression canary. Exercises invite + password reset, refresh
+# tokens, the real mailer transport (SMTP -> Mailpit), and the 6-digit OTP
+# verification path including the generated otp_screen.dart.
+meta:
+  title: "JWT full + OTP verification (default)"
+  purpose: "Mirrors copier.yml defaults — the headline configuration most users generate."
+  guards:
+    - "auth=jwt-full (service_tokens.go, refresh tokens, /auth/me)"
+    - "verification_method=otp (otp_screen.dart + OTP service path)"
+    - "mailer=true (SMTP/Mailpit transport; tokens never returned in API response)"
+    - "full frontend auth wiring (auth_controller, router redirects)"
+  validates: [go build, go vet, go test, flutter analyze, flutter test, docker smoke]
+
+answers:
+  project_name: "JWT Full OTP App"
+  include_frontend: true
+  include_example_domain: true
+  auth: jwt-full
+  mailer: true
+  verification_method: otp
+  caching: redis
+  eventing: none
+  payments: none
+  push_notifications: none
+  object_storage: none
+  agent_tooling: true

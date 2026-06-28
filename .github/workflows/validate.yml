@@ -1,0 +1,79 @@
+name: validate
+
+# Heavy validation of the FINAL post-task build for each profile. Manual-only —
+# trigger from the Actions tab (or `gh workflow run validate.yml`) when you want
+# a clean-room check, e.g. before tagging a release or after a quiet stretch to
+# catch upstream rot (new Go/Flutter/dep releases). Per-PR correctness is covered
+# locally (Makefile / pre-push) plus examples-drift; nothing runs on a timer.
+#
+# If the repo later goes active again and you want it back on a cadence, add:
+#   schedule:
+#     - cron: "0 3 * * 1"   # weekly, Mondays 03:00 UTC
+
+on:
+  workflow_dispatch: # manual trigger from the Actions tab
+
+concurrency:
+  group: validate
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # nightly: see every broken profile in one run
+      matrix:
+        profile: [minimal, jwt-basic, jwt-full-otp, kitchen-sink]
+    name: ${{ matrix.profile }}
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 25432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://test_user:test_password@localhost:25432/test_db?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache-dependency-path: "**/go.sum" # cache Go modules across runs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Render profile (with tasks)
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv tool install copier
+          pip install pyyaml
+          python3 -c "import yaml,sys; yaml.safe_dump(yaml.safe_load(open(sys.argv[1]))['answers'], open('answers.yml','w'), sort_keys=False)" \
+            examples/profiles/${{ matrix.profile }}.yml
+          copier copy --defaults --trust --data-file answers.yml --vcs-ref HEAD . out
+
+      - name: Backend build + test
+        working-directory: out/backend
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+      - name: API spec build
+        working-directory: out/api
+        run: |
+          npm install
+          npm run build:local
+
+      # Frontend (flutter analyze/test) is validated locally via
+      # scripts/validate-examples.sh — intentionally not run here to keep the
+      # nightly lean. Promote it into the matrix if frontend regressions slip.

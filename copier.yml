@@ -3,6 +3,15 @@ _templates_suffix: .jinja
 _envops:
   keep_trailing_newline: true
 
+# Hidden toggle (never prompted; `when: false`). Set via `-d _skip_tasks=true` to
+# render a pure template expansion with no post-generation tasks — used by
+# scripts/render-examples.sh to produce the deterministic, committed snapshots in
+# examples/rendered/. Full post-task builds are validated separately.
+_skip_tasks:
+  type: bool
+  default: false
+  when: false
+
 # Post-generation: run codegen, then resolve the Go module graph so `go.sum`
 # exists and the Docker build is reproducible. Requires Go on the host (the
 # template targets Go devs). Codegen tools are fetched via `go run`.
@@ -15,31 +24,33 @@ _tasks:
     working_directory: "backend"
   - command: "go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.27.0 generate"
     working_directory: "backend"
-    when: "{{ include_example_domain or auth != 'none' }}"
+    when: "{{ (include_example_domain or auth != 'none') and not _skip_tasks }}"
   - command: >-
       for d in gen/api/*/; do [ -e "$d/codegen.yaml" ] || continue;
       name=$(basename "$d");
       (cd "$d" && go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
       --config=codegen.yaml "../../../../api/services/$name.yaml"); done
     working_directory: "backend"
+    when: "{{ not _skip_tasks }}"
   - command: "go mod tidy"
     working_directory: "backend"
+    when: "{{ not _skip_tasks }}"
   # Build the combined OpenAPI spec (api/openapi.yaml). Needed on its own when
   # there is no frontend; the frontend script below rebuilds it otherwise.
   - command: "npm install && npm run build:local"
     working_directory: "api"
-    when: "{{ not include_frontend }}"
+    when: "{{ not include_frontend and not _skip_tasks }}"
   # Frontend: build the spec + generate the Dart API client, scaffold the
   # platform folders, then resolve deps and run build_runner for the .g.dart
   # files. Leaves the Flutter app ready to `flutter run`.
   - command: "bash scripts/regenerate-api-client.sh"
-    when: "{{ include_frontend }}"
+    when: "{{ include_frontend and not _skip_tasks }}"
   - command: "flutter create --project-name {{ project_slug | replace('-', '_') }} --org {{ app_bundle_id.rsplit('.', 1)[0] }} . && rm -f test/widget_test.dart"
     working_directory: "frontend"
-    when: "{{ include_frontend }}"
+    when: "{{ include_frontend and not _skip_tasks }}"
   - command: "flutter pub get && dart run build_runner build --delete-conflicting-outputs"
     working_directory: "frontend"
-    when: "{{ include_frontend }}"
+    when: "{{ include_frontend and not _skip_tasks }}"
 
 _message_after_copy: |
   Project "{{ project_name }}" generated.

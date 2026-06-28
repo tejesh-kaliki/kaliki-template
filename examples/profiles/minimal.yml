@@ -1,0 +1,26 @@
+# Profile: minimal
+#
+# The "floor" of the matrix. Everything optional is OFF. Its job is to prove the
+# template still produces a buildable Go service when none of the modules are
+# wired in — the path most likely to break when a feature is added without an
+# `auth != 'none'` / `include_example_domain` guard.
+meta:
+  title: "Minimal backend"
+  purpose: "Floor profile — bare Go service, no auth, no frontend, no example domain."
+  guards:
+    - "auth=none file set (no auth/ package generated)"
+    - "include_example_domain=false (no items domain, sqlc has nothing to gen)"
+    - "include_frontend=false (server-only _tasks path: api build runs standalone)"
+  validates: [go build, go vet, go test, docker build]
+
+answers:
+  project_name: "Minimal App"
+  include_frontend: false
+  include_example_domain: false
+  auth: none
+  caching: none
+  eventing: none
+  payments: none
+  push_notifications: none
+  object_storage: none
+  agent_tooling: true
