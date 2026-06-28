@@ -87,3 +87,8 @@ RestClient restClient(Ref ref) => RestClient(ref.watch(dioProvider), baseUrl: ap
 
 @riverpod
 AuthClient authClient(Ref ref) => ref.watch(restClientProvider).auth;
+{%- if include_example_domain %}
+
+@riverpod
+ItemsClient itemsClient(Ref ref) => ref.watch(restClientProvider).items;
+{%- endif %}

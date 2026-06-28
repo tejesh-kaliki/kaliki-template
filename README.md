@@ -5,6 +5,19 @@ OpenAPI stack, Docker-first.
 
 ## Generate a project
 
+### Prerequisites
+
+Generation runs codegen and build steps on the host, so you need:
+
+- **Go** (≥ 1.26) — backend codegen (sqlc, oapi-codegen) and `go mod tidy`.
+- **Node / npm** — builds the combined OpenAPI spec.
+- **Flutter SDK** (bundles Dart) — only when generating the frontend
+  (`include_frontend`, the default): generates the Dart API client, scaffolds
+  the platform folders (`flutter create`), and runs `build_runner`.
+
+Pass `-d include_frontend=false` to skip the frontend (and its Flutter
+requirement) entirely.
+
 ```sh
 uvx copier copy gh:kaliki-tech-labs/kaliki-template my-app
 # or from a local checkout:
@@ -29,6 +42,8 @@ no-op default.
   mailpit per flags) and the backend together.
 
 ## Test the template
+
+Needs the same toolchain as generation (Go, Node, Flutter) plus Docker.
 
 ```sh
 ./test-template.sh             # renders combos, go vet, docker smoke test
@@ -61,7 +76,8 @@ verified end-to-end (see `test-template.sh` / `.github/workflows/template-ci.yml
       endpoint is configured
 - [x] production hardening: HTTP server timeouts + signal-based graceful
       shutdown; refuses the dev JWT secret when `APP_ENV=production`
-- [x] GitHub Actions matrix (renders + builds + tests minimal/default/full)
+- [x] GitHub Actions matrix (renders + builds + tests minimal/default/basic/
+      token_mail/full; frontend combos also run `flutter analyze`)
 - [x] integration-style handler tests for `items` + `auth` (real DB, worked
       examples in `internal/testsupport`)
 

@@ -20,6 +20,10 @@ jobs:
             flags: "-d auth=none -d include_example_domain=false -d include_frontend=false -d caching=none"
           - name: default
             flags: ""
+          - name: basic
+            flags: "-d auth=jwt-basic"
+          - name: token_mail
+            flags: "-d verification_method=token"
           - name: full
             flags: "-d eventing=kafka-redpanda -d payments=razorpay -d push_notifications=firebase -d object_storage=s3"
     name: ${{ matrix.name }}
@@ -48,8 +52,16 @@ jobs:
         with:
           node-version: "20"
 
+      # The Flutter SDK (which bundles Dart) is needed for the frontend post-gen
+      # tasks: API client generation, `flutter create`, and build_runner.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
       - uses: astral-sh/setup-uv@v5
 
+      # Renders the project and runs all post-gen tasks (codegen, API spec build,
+      # and — when the frontend is included — the Flutter build steps).
       - name: Render template (${{ matrix.name }})
         run: uvx copier copy --defaults --trust ${{ matrix.flags }} . out
 
@@ -64,3 +76,8 @@ jobs:
         run: |
           npm install
           npm run build:local
+
+      - name: Frontend analyze
+        if: ${{ hashFiles(format('{0}/out/frontend/pubspec.yaml', github.workspace)) != '' }}
+        working-directory: out/frontend
+        run: flutter analyze

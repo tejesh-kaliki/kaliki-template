@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Local mirror of template-ci: render representative combos, build + test the
-# backend (against a throwaway postgres), and build the API spec for each.
-# Docker smoke-tests the default combo's full compose stack.
+# backend (against a throwaway postgres), build the API spec, and analyze the
+# Flutter frontend (when generated). Docker smoke-tests the default combo's full
+# compose stack. Requires Go, Node, and the Flutter SDK on PATH.
+#
+# Unlike CI, this renders the current working tree (uncommitted changes included)
+# rather than committed HEAD — so you can test edits before committing them.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,6 +17,15 @@ cleanup() {
   rm -rf "$WORK"
 }
 trap cleanup EXIT
+
+# Render from a clean copy of the working tree, NOT $ROOT directly: when the
+# source is a git repo, copier copies the committed HEAD and ignores uncommitted
+# changes. Stripping .git makes copier treat it as a plain directory, so local
+# edits are tested before you commit them. (CI renders committed state — that is
+# correct there, since it runs on pushed commits.)
+SRC="$WORK/_src"
+cp -r "$ROOT" "$SRC"
+rm -rf "$SRC/.git"
 
 echo "==> starting throwaway test postgres on :25432"
 docker rm -f "$TESTPG" >/dev/null 2>&1 || true
@@ -28,6 +41,7 @@ done
 COMBOS=(
   "minimal|-d auth=none -d include_example_domain=false -d include_frontend=false -d caching=none"
   "default|"
+  "basic|-d auth=jwt-basic"
   "token_mail|-d verification_method=token"
   "no_mailer|-d mailer=false"
   "full|-d eventing=kafka-redpanda -d payments=razorpay -d push_notifications=firebase -d object_storage=s3"
@@ -36,13 +50,18 @@ COMBOS=(
 for combo in "${COMBOS[@]}"; do
   name="${combo%%|*}"; flags="${combo#*|}"
   echo "==> render: $name"
-  uvx copier copy --defaults --trust $flags "$ROOT" "$WORK/$name"
+  uvx copier copy --defaults --trust $flags "$SRC" "$WORK/$name"
 
   echo "==> backend build + test: $name"
   ( cd "$WORK/$name/backend" && go build ./... && go test ./... )
 
   echo "==> api spec build: $name"
   ( cd "$WORK/$name/api" && npm install --silent && npm run build:local )
+
+  if [[ -f "$WORK/$name/frontend/pubspec.yaml" ]]; then
+    echo "==> frontend analyze: $name"
+    ( cd "$WORK/$name/frontend" && flutter analyze )
+  fi
 done
 
 if [[ "${SKIP_DOCKER:-}" != "1" ]]; then

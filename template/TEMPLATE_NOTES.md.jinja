@@ -60,6 +60,15 @@ returned in any API response. This holds regardless of the configured provider.
 
 Verification method: **{{ verification_method }}**
 {%- if verification_method == 'otp' %} (6-digit codes, 15-minute expiry, constant-time compared).{% else %} (random tokens emailed as links built from `mail.base_url`).{% endif %}
+{%- if verification_method == 'otp' %}
+
+**Signup does not start a session.** `POST /auth/signup` creates the (unverified)
+account, emails the OTP, and returns a short-lived `verification_token` — *not*
+an access/refresh pair. The client submits that token plus the emailed code to
+`POST /auth/verify`, which marks the account verified and returns the session.
+This keeps unverified accounts from holding live sessions. The frontend
+implements exactly this flow: signup screen -> OTP screen -> home.
+{%- endif %}
 
 ### Mail providers
 
@@ -192,7 +201,7 @@ The Flutter app ships a working auth flow as a reference:
 - `lib/auth/auth_controller.dart` — Riverpod controller holding the current user
   (loads `/auth/me` on startup; `login` / `signup` / `logout`).
 - `lib/router/app_router.dart` — GoRouter with an auth redirect.
-- `lib/screens/` — login, signup, home.
+- `lib/screens/` — login, signup,{% if auth == 'jwt-full' and verification_method == 'otp' %} OTP verification,{% endif %} home{% if include_example_domain %} (which renders the example `items` list){% endif %}.
 - `lib/widgets/` — local building blocks (`AppButton`, `AppTextField`). There is
   intentionally **no shared_ui package**: extract one into its own repo only
   once a second app needs to share it.
