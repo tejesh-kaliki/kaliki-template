@@ -1,0 +1,28 @@
+# Profile: kitchen-sink
+#
+# The "ceiling" of the matrix. Every optional module turned on, with the token
+# (link) verification method to cover the OTP profile's complement. Its job is to
+# surface integration conflicts between modules that each build fine alone but
+# clash when generated together (DI wiring, config keys, docker services).
+meta:
+  title: "Kitchen sink (everything on)"
+  purpose: "Ceiling profile — every module enabled; catches cross-module integration conflicts."
+  guards:
+    - "auth=jwt-full + verification_method=token (link path, complements jwt-full-otp)"
+    - "eventing=kafka-redpanda, payments=razorpay, push=firebase, object_storage=s3 wired together"
+    - "all docker-compose services compose without port/config collisions"
+  validates: [go build, go vet, go test, flutter analyze, flutter test, docker smoke]
+
+answers:
+  project_name: "Kitchen Sink App"
+  include_frontend: true
+  include_example_domain: true
+  auth: jwt-full
+  mailer: true
+  verification_method: token
+  caching: redis
+  eventing: kafka-redpanda
+  payments: razorpay
+  push_notifications: firebase
+  object_storage: s3
+  agent_tooling: true

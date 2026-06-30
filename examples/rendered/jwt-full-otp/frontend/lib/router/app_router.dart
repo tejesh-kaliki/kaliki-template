@@ -1,0 +1,56 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../auth/auth_controller.dart';
+import '../screens/home_screen.dart';
+import '../screens/login_screen.dart';
+import '../screens/signup_screen.dart';
+import '../screens/otp_screen.dart';
+
+part 'app_router.g.dart';
+
+@riverpod
+GoRouter appRouter(Ref ref) {
+  // Bridge the auth state into a Listenable so GoRouter re-evaluates redirects.
+  final refresh = ValueNotifier<Object?>(null);
+  ref.onDispose(refresh.dispose);
+  ref.listen(
+    authControllerProvider,
+    (_, next) => refresh.value = next,
+    fireImmediately: true,
+  );
+  ref.listen(
+    pendingVerificationControllerProvider,
+    (_, next) => refresh.value = next,
+    fireImmediately: true,
+  );
+
+  return GoRouter(
+    initialLocation: '/',
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      final auth = ref.read(authControllerProvider);
+      if (auth.isLoading) return null; // wait for the initial load
+      final loggedIn = auth.valueOrNull != null;
+      final awaitingOtp =
+          ref.read(pendingVerificationControllerProvider) != null;
+      final onOtpScreen = state.matchedLocation == '/verify';
+      if (!loggedIn && awaitingOtp) return onOtpScreen ? null : '/verify';
+      if (onOtpScreen) return loggedIn ? '/' : '/login';
+      final onAuthScreen =
+          state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+
+      if (!loggedIn && !onAuthScreen) return '/login';
+      if (loggedIn && onAuthScreen) return '/';
+      return null;
+    },
+    routes: [
+      GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (_, __) => const SignupScreen()),
+      GoRoute(path: '/verify', builder: (_, __) => const OtpScreen()),
+    ],
+  );
+}

@@ -1,0 +1,16 @@
+# Snapshots are pre-task template expansions. Task-generated / volatile files
+# must never be committed here — render-examples.sh also strips them, this is the
+# backstop so a stray one can't slip into a snapshot and make the drift gate flap.
+**/.copier-answers.yml
+**/backend/go.sum
+**/backend/config/env.yaml
+**/backend/gen/
+**/frontend/pubspec.lock
+**/frontend/android/
+**/frontend/ios/
+**/frontend/linux/
+**/frontend/macos/
+**/frontend/windows/
+**/frontend/web/
+**/frontend/**/*.g.dart
+**/api/node_modules/

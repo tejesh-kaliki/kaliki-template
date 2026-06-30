@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Local scratch: complete post-task renders for browsing (make full)
+examples/_full/

@@ -109,10 +109,12 @@ func (s *Service) Signup(c *gin.Context) {
 		User:              toAPIUser(user),
 		VerificationToken: verificationToken,
 	})
-	return
-{%- endif %}
-{%- endif %}
+{%- else %}
 	s.respondWithSession(c, http.StatusCreated, user)
+{%- endif %}
+{%- else %}
+	s.respondWithSession(c, http.StatusCreated, user)
+{%- endif %}
 }
 
 // Login implements gen.ServerInterface.
